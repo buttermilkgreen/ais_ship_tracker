@@ -1,2 +1,2 @@
-# ais_ship_tracker
-Home assistant add on to track passing ships via AISStream
+# AIS Ship Tracker
+Home assistant add on to track passing ships via AISStream.io websocket
