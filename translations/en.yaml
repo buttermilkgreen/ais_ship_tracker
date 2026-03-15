@@ -1,8 +1,0 @@
-configuration:
-  api_key:
-    name: API Key
-    description: Generate this at aisstream.io.
-  bounding_box:
-    name: Bounding Box Coordinates
-    description: >-
-      The geographical area to monitor. Format must be a JSON array containing two coordinate pairs (Bottom-Left and Top-Right). Default is the Port of Dover. 
