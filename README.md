@@ -59,7 +59,7 @@ Please keep in mind that AISStream is a **free, community-supported service**.
 
 ---
 
-## 📱 4. Creating an Alert Automation
+## 📱 Creating an Alert Automation
 
 If you want your phone to buzz every time a ship passes, you can create a simple automation. 
 
@@ -89,3 +89,10 @@ action:
         Vessel Name: {{ trigger.to_state.state }}
         MMSI: {{ trigger.to_state.attributes.mmsi }}
         Time: {{ trigger.to_state.attributes.spotted_time }}
+
+## 📱 Future Roadmap
+- GPS co-ordinates in entity attributes
+- Ship direction, speed and destination in entity attributes 
+- Full map card support to visually track ships in bounding box
+- Clear statte when ships not in bounding box
+- API connectivity status entity
