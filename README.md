@@ -57,7 +57,7 @@ Please keep in mind that AISStream is a **free, community-supported service**.
 
 * **Dropped Connections:** The server may occasionally drop the connection to your Add-on if it gets too busy. The Add-on is programmed to automatically wait a few seconds and safely reconnect without you having to do anything.
 * **Ghost Ships:** You will sometimes see `Unknown Ship`. This is usually because a smaller boat (like a yacht or fishing vessel) has not programmed its name into its radio transponder, or because the API hasn't caught the name yet. This is normal and is not a bug in your Add-on!
-* Look in the add on logs to see if there are any connectivity issues.
+* Look in the add on logs to see if there are any connectivity issues. You can see known issues here: [AISStream Issues](https://github.com/aisstream/issues/issues)
 
 ---
 
