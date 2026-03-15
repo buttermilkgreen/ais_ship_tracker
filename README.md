@@ -69,28 +69,28 @@ If you want your phone to buzz every time a ship passes, you can create a simple
 
 Instead, trigger the automation using the **MMSI** attribute Every ship has a unique MMSI number, so this is guaranteed to change with every single vessel.
 
-Here is some example YAML code for an automation based on the ship's MMSI number.
+Here is some example YAML code for an automation based on the ship's MMSI number. Replace the **notify.notify** action with however/wherever you want to notify. 
 
 ```yaml
-alias: "Maritime Alert: New Ship Spotted"
-description: "Triggers a notification whenever a unique MMSI enters the monitoring zone."
-mode: single
-trigger:
-  - platform: state
-    entity_id: sensor.latest_passing_ship
-    attribute: mmsi
-condition:
-  # This stops false alarms if Home Assistant reboots
+alias: Ship Alerts
+description: Triggers a notification whenever a unique MMSI enters the bounding box specified in the AIS Ship Tracker add on
+triggers:
+  - entity_id:
+      - sensor.last_passing_ship
+    trigger: state
+    attribute: mmsi # <--- Only fires when MMSI changes
+conditions:
   - condition: template
     value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown'] }}"
-action:
-  - service: notify.notify # Change this to your specific phone (e.g., notify.mobile_app_my_iphone)
-    data:
-      title: "🚢 Ship Spotted!"
+actions:
+  - data:
+      title: 🚢 Ship Spotted 🚢
       message: >
-        Vessel Name: {{ trigger.to_state.state }}
-        MMSI: {{ trigger.to_state.attributes.mmsi }}
-        Time: {{ trigger.to_state.attributes.spotted_time }}
+        Ship Name: {{ trigger.to_state.state }} | MMSI: {{
+        trigger.to_state.attributes.mmsi }} | Time: {{
+        trigger.to_state.attributes.spotted_time }}
+    action: notify.notify 
+mode: single
 ```
 
 
