@@ -1,6 +1,6 @@
 # 🚢 AIS Ship Tracker for Home Assistant
 
-This Home Assistant Add-on allows you to draw an invisible box over any body of water in the world where you wish to track shipping traffic. Whenever a ship sails into that box, the add-on will intercept its radio broadcast and instantly push the ship's name, MMSI, and the time it was spotted directly into a Home Assistant entity.
+This Home Assistant Add-on allows you to draw an invisible box over any body of water in the world where you wish to track shipping traffic. Whenever a ship sails into that box, the add-on will intercept its radio broadcast and instantly push the ship's name, MMSI (Maritime Mobile Service Identity), and the time it was spotted directly into a Home Assistant entity.
 
 It does this by creating a sensor entity (`sensor.last_passing_ship`) that you can use to trigger notifications, sound a horn, or just keep a log of maritime traffic outside your window.
 
@@ -16,6 +16,7 @@ To install this Add-on, you need to add this repository to your Home Assistant A
 4. Paste the URL of this GitHub repository into the box and click **Add**.
 5. Close the pop-up and refresh your webpage. 
 6. Scroll down to the bottom of the Add-on Store, find the **AIS Ship Tracker**, and click **Install**.
+7. There are 2 key configuration items required below.
 
 ---
 
@@ -23,9 +24,9 @@ To install this Add-on, you need to add this repository to your Home Assistant A
 
 This Add-on relies on [AISStream.io](https://aisstream.io), a free, community-driven network of radio receivers. To use it, you need a personal API key.
 
-1. Go to [aisstream.io](https://aisstream.io) and sign in (you can use a GitHub or Google account).
-2. Once logged in, you will be given an **API Key** (a long string of letters and numbers).
-3. Copy this key. You will need to paste it into the Add-on's Configuration tab in Home Assistant.
+1. Go to [aisstream.io](https://aisstream.io) and sign in 
+2In your account you can request **API Key** (a long string of letters and numbers).
+3. Copy this key into the Add-on's Configuration tab in Home Assistant.
 
 ---
 
@@ -56,6 +57,7 @@ Please keep in mind that AISStream is a **free, community-supported service**.
 
 * **Dropped Connections:** The server may occasionally drop the connection to your Add-on if it gets too busy. The Add-on is programmed to automatically wait a few seconds and safely reconnect without you having to do anything.
 * **Ghost Ships:** You will sometimes see `Unknown Ship`. This is usually because a smaller boat (like a yacht or fishing vessel) has not programmed its name into its radio transponder, or because the API hasn't caught the name yet. This is normal and is not a bug in your Add-on!
+* Look in the add on logs to see if there are any connectivity issues.
 
 ---
 
@@ -65,7 +67,7 @@ If you want your phone to buzz every time a ship passes, you can create a simple
 
 **Crucial Tip:** Do not set your automation to trigger when the ship's *name* changes. If two "Unknown Ships" pass by in a row, the name doesn't change, and Home Assistant will ignore the second ship. 
 
-Instead, trigger the automation using the **MMSI attribute**. Every ship has a mathematically unique MMSI number, so this is guaranteed to change with every single vessel.
+Instead, trigger the automation using the **MMSI** attribute Every ship has a unique MMSI number, so this is guaranteed to change with every single vessel.
 
 Here is some example YAML code for an automation based on the ship's MMSI number.
 
@@ -89,10 +91,7 @@ action:
         Vessel Name: {{ trigger.to_state.state }}
         MMSI: {{ trigger.to_state.attributes.mmsi }}
         Time: {{ trigger.to_state.attributes.spotted_time }}
+```
 
-## 📱 Future Roadmap
-- GPS co-ordinates in entity attributes
-- Ship direction, speed and destination in entity attributes 
-- Full map card support to visually track ships in bounding box
-- Clear statte when ships not in bounding box
-- API connectivity status entity
+
+
