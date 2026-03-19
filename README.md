@@ -75,7 +75,7 @@ Attached to this entity is a set of attributes extracted directly from the vesse
 
 ---
 
-## ⚠️ API Reliability & Quirks
+## ⚠️ API Reliability
 
 Please keep in mind that AISStream is a **free, community-supported service**. 
 
