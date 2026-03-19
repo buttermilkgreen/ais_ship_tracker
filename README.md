@@ -14,7 +14,7 @@ To install this add-on, you need to add this repository to your Home Assistant a
 2. Click the **add-on Store** button in the bottom right corner.
 3. Click the **three vertical dots** (⋮) in the top right corner and select **Repositories**.
 4. Paste the URL of this GitHub repository into the box and click **add**.
-5. Close the pop-up and refresh your webpage. 
+5. Close the pop-up and refresh the page. 
 6. Scroll down to the bottom of the add-on Store, find the **AIS Ship Tracker**, and click **Install**.
 
 ---
