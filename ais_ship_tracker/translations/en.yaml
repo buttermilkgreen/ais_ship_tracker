@@ -2,7 +2,18 @@ configuration:
   api_key:
     name: API Key
     description: Generate this at aisstream.io.
-  bounding_box:
-    name: Bounding Box Coordinates
-    description: >-
-      The geographical area to monitor. Format must be a JSON array containing two coordinate pairs (Bottom-Left and Top-Right). Default is the Port of Dover. 
+  latitude_south:
+    name: Bounding Box - Bottom-Left Latitude (South)
+    description: The minimum latitude. This forms the bottom edge of your tracking zone.
+  longitude_west:
+    name: Bounding Box - Bottom-Left Longitude (West)
+    description: The minimum longitude. This forms the left edge of your tracking zone.
+  latitude_north:
+    name: Bounding Box - Top-Right Latitude (North)
+    description: The maximum latitude. This forms the top edge of your tracking zone.
+  longitude_east:
+    name: Bounding Box - Top-Right Longitude (East)
+    description: The maximum longitude. This forms the right edge of your tracking zone.
+  dev_mode:
+    name: Test Mode
+    description: Creates a separate entity for testing.
