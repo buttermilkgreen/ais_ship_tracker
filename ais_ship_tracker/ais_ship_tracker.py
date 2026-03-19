@@ -15,11 +15,16 @@ with open('/data/options.json') as f:
     config = json.load(f)
 
 AIS_API_KEY = config['api_key']
-BOUNDING_BOX = json.loads(config['bounding_box'])
+lat_south = float(config['latitude_south'])
+lon_west = float(config['longitude_west'])
+lat_north = float(config['latitude_north'])
+lon_east = float(config['longitude_east'])
+BOUNDING_BOX = [[[lat_south, lon_west], [lat_north, lon_east]]]
+DEV_MODE = config.get('dev_mode', False)
 
 # Home Assistant API Configuration
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
-API_URL = "http://supervisor/core/api/states/sensor.last_passing_ship"
+API_URL = "http://supervisor/core/api/states/sensor.last_passing_ship_dev" if DEV_MODE else "http://supervisor/core/api/states/sensor.last_passing_ship"
 
 # Dictionary to track ships and prevent memory leaks. Format: { mmsi_number: datetime_object }
 seen_ships = {}
@@ -28,6 +33,14 @@ CACHE_EXPIRY_HOURS = 24
 # Backoff variables to prevent AISStream API concurrency lockouts
 RECONNECT_DELAY = 5
 MAX_RECONNECT_DELAY = 120
+
+# Map of AIS Navigational Status integers to human-readable strings
+NAV_STATUS_MAP = {
+    0: "Under way using engine", 1: "At anchor", 2: "Not under command",
+    3: "Restricted manoeuvrability", 4: "Constrained by her draught",
+    5: "Moored", 6: "Aground", 7: "Engaged in fishing",
+    8: "Under way sailing", 14: "AIS-SART active", 15: "Not defined"
+}
 
 def purge_old_ships():
    # Removes ships from memory that haven't been seen recently 
@@ -42,7 +55,7 @@ def purge_old_ships():
     if expired_mmsi:
         log(f"🧹 Purged {len(expired_mmsi)} old ships from memory.")
 
-def update_ha_entity(name, mmsi):
+def update_ha_entity(ship_data):
     if not SUPERVISOR_TOKEN:
         log("Error: SUPERVISOR_TOKEN not found. Are you running this inside a HA Add-on?")
         return
@@ -53,13 +66,19 @@ def update_ha_entity(name, mmsi):
     }
     
     payload = {
-        "state": name,
+        "state": ship_data["name"],
         "attributes": {
-            "friendly_name": "Last Passing Ship",
-            "ship_name": name,
-            "mmsi": str(mmsi), 
+            "friendly_name": "Dev - Last Passing Ship" if DEV_MODE else "Last Passing Ship",
+            "ship_name": ship_data["name"],
+            "mmsi": str(ship_data["mmsi"]), 
             "spotted_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "icon": "mdi:ship-wheel"
+            "icon": "mdi:ship-wheel",
+            "latitude": ship_data["latitude"],
+            "longitude": ship_data["longitude"],
+            "speed_knots": ship_data["sog"],
+            "course": ship_data["cog"],
+            "heading": ship_data["heading"],
+            "navigational_status": ship_data["nav_status_string"]
         }
     }
     
@@ -88,10 +107,29 @@ def on_message(ws, message_json):
             mmsi = message["MetaData"]["MMSI"]
             name = message["MetaData"]["ShipName"].strip() or "Unknown Ship Name"
             
+            # Extract additional telemetry data from the nested 'Message' object
+            pos_report = message.get("Message", {}).get("PositionReport", {})
+            nav_status_int = pos_report.get("NavigationalStatus")
+            
+            # Build the comprehensive ship data dictionary
+            ship_data = {
+                "name": name,
+                "mmsi": mmsi,
+                "latitude": pos_report.get("Latitude"),
+                "longitude": pos_report.get("Longitude"),
+                "sog": pos_report.get("Sog"),
+                "cog": pos_report.get("Cog"),
+                "heading": pos_report.get("TrueHeading"),
+                "nav_status_string": NAV_STATUS_MAP.get(nav_status_int, "Not defined")
+            }
+            
             # Check if this is a newly spotted ship
             if mmsi not in seen_ships:
                 log(f"🚢 NEW SHIP: {name} (MMSI: {mmsi})")
-                update_ha_entity(name, mmsi)
+                log(f"   ↳ Telemetry -> Lat: {ship_data['latitude']}, Lon: {ship_data['longitude']}, "
+                    f"Speed: {ship_data['sog']}kn, Course: {ship_data['cog']}°, "
+                    f"Heading: {ship_data['heading']}°, Status: {ship_data['nav_status_string']}")
+                update_ha_entity(ship_data)
             
             # Always update the last seen timestamp so active ships stay in memory
             seen_ships[mmsi] = datetime.now()
@@ -112,7 +150,7 @@ def on_error(ws, error):
     log(f"WebSocket Error: {error}")
 
 def on_close(ws, close_status_code, close_msg):
-    log("Connection closed by server. Main loop will handle reconnection.")
+    log("❌ Connection closed by server. Will attempt to reconnect...")
 
 def on_open(ws):
     log("🟢 Connected! Monitoring the water...")
@@ -125,7 +163,11 @@ def on_open(ws):
     ws.send(json.dumps(subscription_message))
 
 def start_tracker():
-    log("Connecting to AISStream. This might take up to 2 minutes...")
+    if DEV_MODE:
+        log("[DEV] [1.1.0] Connecting to AISStream. This might take up to 2 minutes...")
+    else:
+        log("[PROD] [1.1.0] Connecting to AISStream. This might take up to 2 minutes...")
+        
     ws = websocket.WebSocketApp(
         "wss://stream.aisstream.io/v0/stream",
         on_open=on_open,
