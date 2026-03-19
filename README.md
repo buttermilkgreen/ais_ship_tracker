@@ -4,8 +4,6 @@ This Home Assistant Add-on allows you to draw an invisible box over any body of 
 
 It does this by creating a sensor entity (`sensor.last_passing_ship`) that you can use to trigger notifications, plot on a map, sound a horn, or just keep a log of maritime traffic outside your window.
 
-Issues? Please use [this form](https://forms.gle/KQDVQQpGf2LZofWA8) or raise a Github issue  
-
 ---
 
 ## 🛠️ 1. Installation
@@ -119,3 +117,6 @@ mode: single
 ```
 
 ---
+## 🐛 Issues or feedback?
+
+Please use [this form](https://forms.gle/KQDVQQpGf2LZofWA8) or raise a Github issue.  
