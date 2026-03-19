@@ -1,44 +1,44 @@
 # 🚢 AIS Ship Tracker for Home Assistant
 
-This Home Assistant Add-on allows you to draw an invisible box over any body of water in the world where you wish to track shipping traffic. Whenever a ship sails into that box, the add-on will intercept its radio broadcast and instantly push the ship's telemetry directly into a Home Assistant entity.
+This Home Assistant add-on allows you to draw an invisible box over any body of water in the world where you wish to track shipping traffic. Whenever a ship sails into that box, the add-on will intercept its radio broadcast and instantly push the ship's telemetry directly into a Home Assistant entity.
 
-It does this by creating a sensor entity (`sensor.last_passing_ship`) that you can use to trigger notifications, plot on a map, sound a horn, or just keep a log of maritime traffic outside your window.
+It creates a sensor entity (`sensor.last_passing_ship`) that you can use to trigger notifications, plot on a map, sound a horn, or just keep a log of maritime traffic outside your window.
 
 ---
 
 ## 🛠️ 1. Installation
 
-To install this Add-on, you need to add this repository to your Home Assistant Add-on Store. 
+To install this add-on, you need to add this repository to your Home Assistant add-on Store. 
 
-1. Open your Home Assistant dashboard and navigate to **Settings** > **Add-ons**.
-2. Click the **Add-on Store** button in the bottom right corner.
+1. Open your Home Assistant dashboard and navigate to **Settings** > **add-ons**.
+2. Click the **add-on Store** button in the bottom right corner.
 3. Click the **three vertical dots** (⋮) in the top right corner and select **Repositories**.
-4. Paste the URL of this GitHub repository into the box and click **Add**.
+4. Paste the URL of this GitHub repository into the box and click **add**.
 5. Close the pop-up and refresh your webpage. 
-6. Scroll down to the bottom of the Add-on Store, find the **AIS Ship Tracker**, and click **Install**.
+6. Scroll down to the bottom of the add-on Store, find the **AIS Ship Tracker**, and click **Install**.
 
 ---
 
 ## 🔑 2. Getting Your API Key
 
-This Add-on relies on [AISStream.io](https://aisstream.io), a free, community-driven network of radio receivers. To use it, you need a personal API key.
+This add-on relies on [AISStream.io](https://aisstream.io), a free, community-driven network of radio receivers. To use it, you need a personal API key.
 
 1. Go to [aisstream.io](https://aisstream.io) and sign in.
 2. In your account, you can request an **API Key** (a long string of letters and numbers).
-3. Copy this key into the Add-on's Configuration tab in Home Assistant.
+3. Copy this key into the add-on's Configuration tab in Home Assistant.
 
 ---
 
 ## 🗺️ 3. Drawing Your Bounding Box
 
-You need to tell the Add-on exactly where to look. To do this, imagine drawing a rectangle over a map. The Add-on needs to know the exact GPS coordinates of two opposite corners: the **Bottom-Left** and the **Top-Right**. There are a number of ways you can do this but below are 2 different options. 
+You need to tell the add-on exactly where to look. To do this, imagine drawing a rectangle over a map. The add-on needs to know the exact GPS coordinates of two opposite corners: the **Bottom-Left** and the **Top-Right**. There are a number of ways you can do this but below are 2 different options. 
 
 **How to find your coordinates using Google Maps:**
 1. Open Google Maps on your computer.
 2. Find the area of water you want to monitor.
 3. **Find the Bottom-Left (South-West) corner:** Right-click on the map where you want the bottom-left corner of your tracking zone to be. A small menu will appear with two numbers at the top (e.g., `51.4545, -2.5879`). 
 4. Click those numbers to copy them. 
-5. Paste the first number into **`latitude_south`** and the second number into **`longitude_west`** in the Add-on Configuration tab.
+5. Paste the first number into **`latitude_south`** and the second number into **`longitude_west`** in the add-on Configuration tab.
 6. **Find the Top-Right (North-East) corner:** Right-click the map where you want the top-right corner to be.
 7. Click the numbers to copy them.
 8. Paste the first number into **`latitude_north`** and the second number into **`longitude_east`**.
@@ -48,7 +48,7 @@ You need to tell the Add-on exactly where to look. To do this, imagine drawing a
 2. Zoom in on the area of water you want to monitor.
 3. Click the **rectangle tool** (the small box icon on the left of the map) and draw your tracking zone.
 4. Look at the very bottom of the screen. You will see a string of four numbers next to the word **Box** (e.g., `-2.718, 51.423, -2.521, 51.501`).
-5. **CRITICAL STEP:** bboxfinder outputs these numbers in a specific order: `Longitude, Latitude, Longitude, Latitude`. You must paste them into your Add-on configuration in exactly this mapping:
+5. **CRITICAL STEP:** bboxfinder outputs these numbers in a specific order: `Longitude, Latitude, Longitude, Latitude`. You must paste them into your add-on configuration in exactly this mapping:
    * **First number:** Paste into `longitude_west`
    * **Second number:** Paste into `latitude_south`
    * **Third number:** Paste into `longitude_east`
@@ -58,7 +58,7 @@ You need to tell the Add-on exactly where to look. To do this, imagine drawing a
 
 ## 📊 Entity Attributes & Telemetry
 
-The Add-on creates and updates a single entity: `sensor.last_passing_ship`. The main state of this sensor will always be the name of the most recently spotted ship. 
+The add-on creates and updates a single entity: `sensor.last_passing_ship`. The main state of this sensor will always be the name of the most recently spotted ship. 
 
 Attached to this entity is a set of attributes extracted directly from the vessel's radio transponder:
 
@@ -79,7 +79,7 @@ Attached to this entity is a set of attributes extracted directly from the vesse
 
 Please keep in mind that AISStream is a **free, community-supported service**. 
 
-* **Dropped Connections:** The server may occasionally drop the connection to your Add-on if it gets too busy. The add-on will try to reconnect without you having to do anything. Look in the add-on logs if you suspect constant connectivity issues.
+* **Dropped Connections:** The server may occasionally drop the connection to your add-on if it gets too busy. The add-on will try to reconnect without you having to do anything. Look in the add-on logs if you suspect constant connectivity issues.
 * **Ghost Ships:** You may sometimes see `Unknown Ship Name`. This usually happens because a smaller boat (like a yacht or fishing vessel) has not programmed its name into its radio transponder, or because the API simply hasn't caught the broadcasted name yet. This is normal behaviour.
 * **Outages:** Sometimes the add-on appears to be connected in the logs, but no ships are being reported. You can sometimes check for ongoing API service issues here (it isnt a live status page and relies on users reporting issues): [AISStream Issues](https://github.com/aisstream/issues/issues).
 
@@ -115,6 +115,14 @@ actions:
     action: notify.notify 
 mode: single
 ```
+
+---
+
+## 🎚️ Test Mode 
+
+TBH this mainly helps with development and can be ignored...but in the interest of good documentation:
+
+When you switch this on and restart the add-on, the main sensor will stop updating and instead a separate entity called `sensor.last_passing_ship_dev` will appear and start updating. The logs will indicate if you are in test mode by prepending `[DEV]` to the initial log line. 
 
 ---
 ## 🐛 Issues or feedback?
