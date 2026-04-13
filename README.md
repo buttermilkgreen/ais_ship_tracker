@@ -7,19 +7,21 @@ It creates a sensor entity (`sensor.last_passing_ship`) that you can use to trig
 You can also track multiple vessels and show them on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. 
 
 
-**Dashboard Example:**
+**Dashboard Example**
 
 <img width="555" height="500" alt="Dashboard Example" src="https://github.com/user-attachments/assets/e3bc48e3-13aa-43c6-af5b-a0311da23429" />
 
 ---
 
-**More Info:**
+**More Info**
+
+Speed shown in knots
 
 <img width="285" height="266" alt="More Info Pop Up" src="https://github.com/user-attachments/assets/0da1a1b3-01ed-4720-87ac-04caaf5e14e1" />
 
 ---
 
-**More Info - Attributes:** 
+**More Info - Attributes** 
 
 <img width="280" height="360" alt="More Info Attributes" src="https://github.com/user-attachments/assets/12040294-411b-4d58-853b-5601ece31d91" />
 
