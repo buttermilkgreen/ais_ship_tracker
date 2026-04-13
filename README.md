@@ -6,7 +6,23 @@ It creates a sensor entity (`sensor.last_passing_ship`) that you can use to trig
 
 You can also track multiple vessels and show them on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. 
 
-<img width="255" height="248" alt="SCR-20260413-mvun-2" src="https://github.com/user-attachments/assets/4df277d1-bc7f-4bc7-a8ae-e9ffec2d9622" />
+
+**Dashboard Example:**
+
+<img width="555" height="500" alt="Dashboard Example" src="https://github.com/user-attachments/assets/e3bc48e3-13aa-43c6-af5b-a0311da23429" />
+
+---
+
+**More Info:**
+
+<img width="285" height="266" alt="More Info Pop Up" src="https://github.com/user-attachments/assets/0da1a1b3-01ed-4720-87ac-04caaf5e14e1" />
+
+---
+
+**More Info - Attributes:** 
+
+<img width="280" height="360" alt="More Info Attributes" src="https://github.com/user-attachments/assets/12040294-411b-4d58-853b-5601ece31d91" />
+
 
 
 ---
@@ -21,6 +37,13 @@ To install this add-on, you need to add this repository to your Home Assistant a
 4. Paste the URL of this GitHub repository into the box and click **add**.
 5. Close the pop-up and refresh the page. 
 6. Scroll down to the bottom of the add-on Store, find the **AIS Ship Tracker**, and click **Install**.
+7. Enter you API key and bounding box co-ordinates. Steps in section #2 and #3
+
+*Optional steps for showing multiple ships on a map*
+
+8. Install [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) to allow you to have a map card with multiple ship entities 
+9. Install [Card-mod](https://github.com/thomasloven/lovelace-card-mod) to allow you to make the ship icons on the map smaller
+10. Section #4 has the yaml to configure a multi-ship map.
 
 ---
 
@@ -43,15 +66,16 @@ You need to tell the add-on exactly where to look. To do this, imagine drawing a
 2. Zoom in on the area of water you want to monitor.
 3. Click the **rectangle tool** (the small box icon on the left of the map) and draw your tracking zone.
 4. Look at the very bottom of the screen. You will see a string of four numbers next to the word **Box** (e.g., `-2.718, 51.423, -2.521, 51.501`).
-5. **CRITICAL STEP:** bboxfinder outputs these numbers in a specific order: `Longitude, Latitude, Longitude, Latitude`. You must paste them into your add-on configuration in exactly this mapping:
-   * **First number:** Paste into `longitude_west`
-   * **Second number:** Paste into `latitude_south`
-   * **Third number:** Paste into `longitude_east`
-   * **Fourth number:** Paste into `latitude_north`
+5. Paste the numbers into the boxes in order:
+   * **First number:** Paste into `Bottom-Left Longitude (West)`
+   * **Second number:** Paste into `Bottom-Left Latitude (South)`
+   * **Third number:** Paste into `Top-Right Longitude (East)`
+   * **Fourth number:** Paste into `Top-Right Latitude (North)`
 
 ---
 ## 📍 4. Multi-Ship Tracking (Map Card)
-You can track multiple ships simultaneously for viewing on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. [Card-mod](https://github.com/thomasloven/lovelace-card-mod) is also recommended to make the ship icons smaller using CSS.
+You can track multiple ships simultaneously for viewing on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. The official HA Map card will not populate dynamically. Given this add on creates entities for ships as they enter our bounding box, it needs this alternative map solution.  
+[Card-mod](https://github.com/thomasloven/lovelace-card-mod) is also recommended to make the ship icons smaller using CSS.
 
 When the *"Multi-Ship Tracking"* configuration is enabled:
 * Every ship that enters your bounding box will automatically generate a dedicated entity formatted as sensor.ais_ship_{mmsi}.
@@ -82,8 +106,26 @@ filter:
         label_mode: icon
 ```
 
-**Class B Vessels:**
-You can also choose to track smaller leisure craft (yachts, sailing boats, etc.) by enabling "Enable Class B Vessels" in the configuration.
+<img width="255" height="248" alt="Map View" src="https://github.com/user-attachments/assets/4df277d1-bc7f-4bc7-a8ae-e9ffec2d9622" />
+
+### Icon Reference
+
+The ship's icon on the map is based on its current navigational status. This status is also available as an attribute. If a status is not defined by the vessel, it defaults to a standard ferry icon.
+
+| Icon | Navigational Status | MDI Name |
+| :---: | :--- | :--- |
+| <img src="https://api.iconify.design/mdi/ferry.svg" width="20"> | Under way using engine | `mdi:ferry` |
+| <img src="https://api.iconify.design/mdi/anchor.svg" width="20"> | At anchor | `mdi:anchor` |
+| <img src="https://api.iconify.design/mdi/pier.svg" width="20"> | Moored | `mdi:pier` |
+| <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Aground | `mdi:lifebuoy` |
+| <img src="https://api.iconify.design/mdi/fish.svg" width="20"> | Engaged in fishing | `mdi:fish` |
+| <img src="https://api.iconify.design/mdi/sail-boat.svg" width="20"> | Under way sailing | `mdi:sail-boat` |
+| <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Not under command | `mdi:lifebuoy` |
+| <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Restricted manoeuvrability | `mdi:lifebuoy` |
+| <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Constrained by her draught | `mdi:lifebuoy` |
+| <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | AIS-SART active | `mdi:lifebuoy` |
+| <img src="https://api.iconify.design/mdi/ferry.svg" width="20"> | Not defined / Unknown | `mdi:ferry` |
+
 ___
 
 ## 📊 Entity Attributes & Telemetry
@@ -100,8 +142,31 @@ Attached to this entity is a set of attributes extracted directly from the vesse
 * **`course`**: The vessel's direction of travel in degrees.
 * **`heading`**: The true direction the ship's bow is pointing in degrees.
 * **`navigational_status`**: The current operational state of the vessel (e.g., "Under way using engine", "At anchor", "Moored").
+* **`vessel_class`**: The class of the current vessel, either Class A (generally for commercial vessels) or Class B (generally for leisure vessels). 
 
-*The entity is compatible with the HA map card, but until a future release, you will only see 1 ship at a time*
+**Example of how this appears:**
+
+```yaml
+state:
+  translated: "7.9"
+  raw: "7.9"
+  last_changed: "2026-04-13T15:16:05.735Z"
+  last_updated: "2026-04-13T15:18:51.492Z"
+attributes:
+  friendly_name: FLATHOLM
+  ship_name: FLATHOLM
+  mmsi: "235014266"
+  spotted_time: "2026-04-13 16:18:51"
+  latitude: 50.851475
+  longitude: -1.3427016666666667
+  speed_knots: 7.9
+  course: 128.2
+  heading: 128
+  navigational_status: Under way using engine
+  vessel_class: Class A
+  icon: mdi:ferry
+```
+
 
 ---
 
@@ -112,6 +177,9 @@ Please keep in mind that AISStream is a **free, community-supported service**.
 * **Dropped Connections:** The server may occasionally drop the connection to your add-on if it gets too busy. The add-on will try to reconnect without you having to do anything. Look in the add-on logs if you suspect constant connectivity issues.
 * **Ghost Ships:** You may sometimes see `Unknown Ship Name`. This usually happens because a smaller boat (like a yacht or fishing vessel) has not programmed its name into its radio transponder, or because the API simply hasn't caught the broadcasted name yet. This is normal behaviour.
 * **Outages:** Sometimes the add-on appears to be connected in the logs, but no ships are being reported. You can sometimes check for ongoing API service issues here (it isnt a live status page and relies on users reporting issues): [AISStream Issues](https://github.com/aisstream/issues/issues).
+
+The add-on does show connectivity state via entity `sensor.ais_connection_status` and if in doubt, check the logs. 
+
 
 ---
 
