@@ -2,18 +2,18 @@ configuration:
   api_key:
     name: API Key
     description: Generate this at aisstream.io.
-  latitude_south:
-    name: Bounding Box - Bottom-Left Latitude (South)
-    description: Bottom edge of your tracking zone.
   longitude_west:
     name: Bounding Box - Bottom-Left Longitude (West)
     description: Left edge of your tracking zone.
-  latitude_north:
-    name: Bounding Box - Top-Right Latitude (North)
-    description: Top edge of your tracking zone.
+  latitude_south:
+    name: Bounding Box - Bottom-Left Latitude (South)
+    description: Bottom edge of your tracking zone.
   longitude_east:
     name: Bounding Box - Top-Right Longitude (East)
     description: Right edge of your tracking zone.
+  latitude_north:
+    name: Bounding Box - Top-Right Latitude (North)
+    description: Top edge of your tracking zone.
   include_class_b:
     name: Include Class B Vessels
     description: Enable tracking for smaller vessels like pleasure craft, sailboats, and small passenger boats.
