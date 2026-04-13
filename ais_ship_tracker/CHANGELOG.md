@@ -1,12 +1,15 @@
 # Changelog
 
+## 1.2.1
+* [Fix] Ordered bounding box fields in config to match values from bboxfinder.com for easier input
+
 ## 1.2.0
 * [Feature] Ability to track multiple ships on a map card (auto-entities custom map card from HACS is recommended)
   * [Config] "Multi-Ship Tracking" - Enables this feature
   * All ships that enter the bounding box will have an entity created in the format sensor.ais_ship_{mmsi}
   * Ship entities that no longer exist in the bounding box will have the GPS co-ordinates cleared after 30 minutes of no updates (default)
   * Icons show the status of each ship. See documentation.
-  * [Config] "Ship timeout" - how long before ships that stop reporting are cleared from the map
+  * [Config] "Ship Timeout" - how long before ships that stop reporting are cleared from the map
   * [Config] "Clear Ships on Startup" - Remove all ship entities every time add on restarts 
 * [Feature] Ability to track Class B vessels (smaller boats like yachts, sailing boats etc) along with attribute: vessel_class. 
   * [Config] "Enable Class B Vessels" - enables this feature

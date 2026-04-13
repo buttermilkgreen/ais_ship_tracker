@@ -1,7 +1,7 @@
 name: "AIS Ship Tracker"
-version: "1.2.0"
+version: "1.2.1"
 slug: "ais_ship_tracker"
-description: "Tracks passing ships via AISStream."
+description: "Tracks passing ships via AISStream"
 url: "https://github.com/buttermilkgreen/ais_ship_tracker" 
 arch:
   - "aarch64"
@@ -14,10 +14,10 @@ init: false
 homeassistant_api: true
 options:
   api_key: ""
-  latitude_south: 50.90
   longitude_west: 1.20
-  latitude_north: 51.20
+  latitude_south: 50.90
   longitude_east: 1.80
+  latitude_north: 51.20
   include_class_b: false
   enable_map_entities: false
   map_timeout_minutes: 30
@@ -25,10 +25,10 @@ options:
   dev_mode: false
 schema:
   api_key: "password"
-  latitude_south: "float"
   longitude_west: "float"
-  latitude_north: "float"
+  latitude_south: "float"
   longitude_east: "float"
+  latitude_north: "float" 
   include_class_b: "bool?"
   enable_map_entities: "bool?"
   map_timeout_minutes: "int?"
