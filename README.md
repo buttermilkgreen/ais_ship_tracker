@@ -4,6 +4,11 @@ This Home Assistant add-on allows you to draw an invisible box over any body of 
 
 It creates a sensor entity (`sensor.last_passing_ship`) that you can use to trigger notifications, plot on a map, sound a horn, or just keep a log of maritime traffic outside your window.
 
+You can also track multiple vessels and show them on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. 
+
+<img width="255" height="248" alt="SCR-20260413-mvun-2" src="https://github.com/user-attachments/assets/4df277d1-bc7f-4bc7-a8ae-e9ffec2d9622" />
+
+
 ---
 
 ## 🛠️ 1. Installation
@@ -33,16 +38,6 @@ This add-on relies on [AISStream.io](https://aisstream.io), a free, community-dr
 
 You need to tell the add-on exactly where to look. To do this, imagine drawing a rectangle over a map. The add-on needs to know the exact GPS coordinates of two opposite corners: the **Bottom-Left** and the **Top-Right**. There are a number of ways you can do this but below are 2 different options. 
 
-**How to find your coordinates using Google Maps:**
-1. Open Google Maps on your computer.
-2. Find the area of water you want to monitor.
-3. **Find the Bottom-Left (South-West) corner:** Right-click on the map where you want the bottom-left corner of your tracking zone to be. A small menu will appear with two numbers at the top (e.g., `51.4545, -2.5879`). 
-4. Click those numbers to copy them. 
-5. Paste the first number into **`latitude_south`** and the second number into **`longitude_west`** in the add-on Configuration tab.
-6. **Find the Top-Right (North-East) corner:** Right-click the map where you want the top-right corner to be.
-7. Click the numbers to copy them.
-8. Paste the first number into **`latitude_north`** and the second number into **`longitude_east`**.
-
 **How to find your coordinates using bboxfinder:**
 1. Go to [bboxfinder.com](http://bboxfinder.com).
 2. Zoom in on the area of water you want to monitor.
@@ -55,6 +50,41 @@ You need to tell the add-on exactly where to look. To do this, imagine drawing a
    * **Fourth number:** Paste into `latitude_north`
 
 ---
+## 📍 4. Multi-Ship Tracking (Map Card)
+You can track multiple ships simultaneously for viewing on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. [Card-mod](https://github.com/thomasloven/lovelace-card-mod) is also recommended to make the ship icons smaller using CSS.
+
+When the *"Multi-Ship Tracking"* configuration is enabled:
+* Every ship that enters your bounding box will automatically generate a dedicated entity formatted as sensor.ais_ship_{mmsi}.
+* These entities dynamically update their GPS co-ordinates and include an icon indicating their current navigational status.
+* Ship Timeout: To keep your map clean, ships that stop broadcasting will have their co-ordinates cleared after a specified period of inactivity (default is 30 minutes, configurable via "Ship Timeout").
+* Clear Ships on Startup: You can configure the add-on to automatically purge all existing ship entities from the map whenever the add-on is restarted.
+
+Example YAML for a solid map view using auto-entities and card-mod:
+```yaml
+type: custom:auto-entities
+show_empty: false
+card:
+  type: map
+  title: null
+  dark_mode: false
+  cluster: false
+  card_mod:
+    style:
+      ha-map $ ha-entity-marker $: |
+        .marker {
+          height: 30px !important;
+          width: 30px !important;
+        }
+filter:
+  include:
+    - entity_id: sensor.ais_ship_*
+      options:
+        label_mode: icon
+```
+
+**Class B Vessels:**
+You can also choose to track smaller leisure craft (yachts, sailing boats, etc.) by enabling "Enable Class B Vessels" in the configuration.
+___
 
 ## 📊 Entity Attributes & Telemetry
 
