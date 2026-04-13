@@ -4,16 +4,28 @@ configuration:
     description: Generate this at aisstream.io.
   latitude_south:
     name: Bounding Box - Bottom-Left Latitude (South)
-    description: The minimum latitude. This forms the bottom edge of your tracking zone.
+    description: Bottom edge of your tracking zone.
   longitude_west:
     name: Bounding Box - Bottom-Left Longitude (West)
-    description: The minimum longitude. This forms the left edge of your tracking zone.
+    description: Left edge of your tracking zone.
   latitude_north:
     name: Bounding Box - Top-Right Latitude (North)
-    description: The maximum latitude. This forms the top edge of your tracking zone.
+    description: Top edge of your tracking zone.
   longitude_east:
     name: Bounding Box - Top-Right Longitude (East)
-    description: The maximum longitude. This forms the right edge of your tracking zone.
+    description: Right edge of your tracking zone.
+  include_class_b:
+    name: Include Class B Vessels
+    description: Enable tracking for smaller vessels like pleasure craft, sailboats, and small passenger boats.
+  enable_map_entities:
+    name: Multi-Ship Tracking
+    description: Creates an individual sensor for every tracked ship. Recommend the auto-entities plugin to show these on a map card. 
+  map_timeout_minutes:
+    name: Ship Entity Timeout (Minutes)
+    description: How long before a ship with no new tracking data is removed from the map.
+  clear_map_on_startup:
+    name: Clear Ship Entities on Startup
+    description: Clears ship entities from the map when add-on starts.
   dev_mode:
     name: Test Mode
-    description: Creates a separate entity for testing.
+    description: Creates separate entities for testing.
