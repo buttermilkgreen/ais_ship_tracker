@@ -185,9 +185,8 @@ The add-on does show connectivity state via entity `sensor.ais_connection_status
 
 ## 📱 Creating an Alert Automation
 
-**Crucial Tip:** Do not set your automation to trigger when the ship's *name* changes. If two "Unknown Ship Name" vessels pass by in a row, the state doesn't change, and Home Assistant will ignore the second ship. 
 
-Instead, trigger the automation using the **`mmsi`** attribute. Every ship has a unique MMSI number, so this is guaranteed to change with every single vessel.
+The best approach for triggering an automation when new ships enter the bounding box is to use the **`mmsi`** attribute. Every ship has a unique MMSI number, so this is guaranteed to change with every single vessel.
 
 Here is an example YAML automation that utilises the telemetry data. Replace the `notify.notify` action with your preferred notification service. 
 
@@ -213,6 +212,9 @@ actions:
     action: notify.notify 
 mode: single
 ```
+
+**Tip:** Do not set your automation to trigger when the ship's *name* changes. If two "Unknown Ship Name" vessels pass by in a row, the state doesn't change, and Home Assistant will ignore the second ship. 
+
 
 ---
 
