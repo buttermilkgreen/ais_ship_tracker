@@ -175,10 +175,10 @@ attributes:
 ## 🛠️ 5. Config Specifics
 
 * **`API Key`**: The free API key you need to generate from [AISStream.io](https://aisstream.io).
-* **`Bounding Box - Bottom-Left Longitude (West)`**: The exact local time the transponder data was received.
-* **`Bounding Box - Bottom-Left Latitude (South)`**: The exact GPS latitude coordinate.
-* **`Bounding Box - Top-Right Longitude (East)`**: The exact GPS longitude coordinate.
-* **`Bounding Box - Top-Right Latitude (North)`**: The vessel's current speed over ground.
+* **`Bounding Box - Bottom-Left Longitude (West)`**: Left edge of the bounding box and the first number from bboxfinder co-ordinates.
+* **`Bounding Box - Bottom-Left Latitude (South)`**: Bottom edge of the bounding box and the second number from bboxfinder co-ordinates.
+* **`Bounding Box - Top-Right Longitude (East)`**: Right edge of the bounding box and the third number from bboxfinder co-ordinates.
+* **`Bounding Box - Top-Right Latitude (North)`**: Top edge of the bounding box and the fourth number from bboxfinder co-ordinates.
 * **`Include Class B Vessels`**: Class B vessels (typically leisure craft) will be shown
 * **`Multi-Ship Tracking`**: Creates new entities for all ships that enter the bounding box in the format `sensor.ais_ship_{mmsi}`
 * **`Ship Entity Timeout (Minutes)`**: The current operational state of the vessel (e.g., "Under way using engine", "At anchor", "Moored").
