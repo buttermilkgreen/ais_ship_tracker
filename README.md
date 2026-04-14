@@ -68,7 +68,7 @@ You need to tell the add-on exactly where to look. To do this, imagine drawing a
 2. Zoom in on the area of water you want to monitor.
 3. Click the **rectangle tool** (the small box icon on the left of the map) and draw your tracking zone.
 4. Look at the very bottom of the screen. You will see a string of four numbers next to the word **Box** (e.g., `-2.718, 51.423, -2.521, 51.501`).
-5. Paste the numbers into the boxes in order:
+5. Paste the numbers into the boxes in order in the add-on config:
    * **First number:** Paste into `Bottom-Left Longitude (West)`
    * **Second number:** Paste into `Bottom-Left Latitude (South)`
    * **Third number:** Paste into `Top-Right Longitude (East)`
@@ -80,7 +80,7 @@ You can track multiple ships simultaneously for viewing on a map. The [auto-enti
 [Card-mod](https://github.com/thomasloven/lovelace-card-mod) is also recommended to make the ship icons smaller using CSS.
 
 When the *"Multi-Ship Tracking"* configuration is enabled:
-* Every ship that enters your bounding box will automatically generate a dedicated entity formatted as sensor.ais_ship_{mmsi}.
+* Every ship that enters your bounding box will automatically generate a dedicated entity formatted as `sensor.ais_ship_{mmsi}`.
 * These entities dynamically update their GPS co-ordinates and include an icon indicating their current navigational status.
 * Ship Timeout: To keep your map clean, ships that stop broadcasting will have their co-ordinates cleared after a specified period of inactivity (default is 30 minutes, configurable via "Ship Timeout").
 * Clear Ships on Startup: You can configure the add-on to automatically purge all existing ship entities from the map whenever the add-on is restarted.
@@ -119,9 +119,9 @@ The ship's icon on the map is based on its current navigational status. This sta
 | <img src="https://api.iconify.design/mdi/ferry.svg" width="20"> | Under way using engine | `mdi:ferry` |
 | <img src="https://api.iconify.design/mdi/anchor.svg" width="20"> | At anchor | `mdi:anchor` |
 | <img src="https://api.iconify.design/mdi/pier.svg" width="20"> | Moored | `mdi:pier` |
-| <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Aground | `mdi:lifebuoy` |
 | <img src="https://api.iconify.design/mdi/fish.svg" width="20"> | Engaged in fishing | `mdi:fish` |
 | <img src="https://api.iconify.design/mdi/sail-boat.svg" width="20"> | Under way sailing | `mdi:sail-boat` |
+| <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Aground | `mdi:lifebuoy` |
 | <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Not under command | `mdi:lifebuoy` |
 | <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Restricted manoeuvrability | `mdi:lifebuoy` |
 | <img src="https://api.iconify.design/mdi/lifebuoy.svg" width="20"> | Constrained by her draught | `mdi:lifebuoy` |
@@ -132,9 +132,9 @@ ___
 
 ## 📊 Entity Attributes & Telemetry
 
-The add-on creates and updates a single entity: `sensor.last_passing_ship`. The main state of this sensor will always be the name of the most recently spotted ship. 
+The add-on creates and updates a single entity by default: `sensor.last_passing_ship`. The main state of this sensor will always be the name of the most recently spotted ship. 
 
-Attached to this entity is a set of attributes extracted directly from the vessel's radio transponder:
+Attached to this entity is a set of attributes extracted directly from the vessel's radio transponder. Where you enable `Multi-ship Tracking`, all ship entities are created with the attributes below. 
 
 * **`mmsi`**: The Maritime Mobile Service Identity. This is a unique 9-digit number assigned to the vessel.
 * **`spotted_time`**: The exact local time the transponder data was received.
@@ -168,6 +168,22 @@ attributes:
   vessel_class: Class A
   icon: mdi:ferry
 ```
+
+**Note:** When `Multi-ship Tracking` is enabled, entities are created for every ship that enters the bounding box. After the `Ship Entity Timeout` expires (default 30 minutes), ships will be removed from the map **but** they will remain in your Home Assistant entity list until the next Home Assistant restart. This is due to how the Home Assistant REST API works, in that you can only create and modify entities, but not delete them. 
+
+---
+## 🛠️ 5. Config Specifics
+
+* **`API Key`**: The free API key you need to generate from [AISStream.io](https://aisstream.io).
+* **`Bounding Box - Bottom-Left Longitude (West)`**: The exact local time the transponder data was received.
+* **`Bounding Box - Bottom-Left Latitude (South)`**: The exact GPS latitude coordinate.
+* **`Bounding Box - Top-Right Longitude (East)`**: The exact GPS longitude coordinate.
+* **`Bounding Box - Top-Right Latitude (North)`**: The vessel's current speed over ground.
+* **`Include Class B Vessels`**: Class B vessels (typically leisure craft) will be shown
+* **`Multi-Ship Tracking`**: Creates new entities for all ships that enter the bounding box in the format `sensor.ais_ship_{mmsi}`
+* **`Ship Entity Timeout (Minutes)`**: The current operational state of the vessel (e.g., "Under way using engine", "At anchor", "Moored").
+* **`Clear Ship Entities on Startup`**: How long before ships are cleared from the map after receiving no updates
+* **`Test Mode`**: The main sensors will stop updating and all sensors will be appended with `_dev`. For example `sensor.last_passing_ship_dev`, `sensor.ais_connection_status_dev`, `sensor.ais_ship_{mmsi}`
 
 
 ---
@@ -217,14 +233,6 @@ mode: single
 
 **Tip:** Do not set your automation to trigger when the ship's *name* changes. If two "Unknown Ship Name" vessels pass by in a row, the state doesn't change, and Home Assistant will ignore the second ship. 
 
-
----
-
-## 🎚️ Test Mode 
-
-TBH this mainly helps with development and can be ignored...but in the interest of good documentation:
-
-When you switch this on and restart the add-on, the main sensor will stop updating and instead a separate entity called `sensor.last_passing_ship_dev` will appear and start updating. The logs will indicate if you are in test mode by prepending `[DEV]` to the initial log line. 
 
 ---
 ## 🐛 Issues or feedback?
