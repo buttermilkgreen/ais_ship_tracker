@@ -6,8 +6,6 @@ It creates a sensor entity (`sensor.last_passing_ship`) that you can use to trig
 
 You can also track multiple vessels and show them on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. 
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fbuttermilkgreen%2Fais_ship_tracker)
-
 **Dashboard Example**
 
 <img width="555" height="500" alt="Dashboard Example" src="https://github.com/user-attachments/assets/e3bc48e3-13aa-43c6-af5b-a0311da23429" />
