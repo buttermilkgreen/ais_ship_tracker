@@ -60,7 +60,7 @@ This add-on relies on [AISStream.io](https://aisstream.io), a free, community-dr
 
 ## 🗺️ 3. Drawing Your Bounding Box
 
-You need to tell the add-on exactly where to look. To do this, imagine drawing a rectangle over a map. The add-on needs to know the exact GPS coordinates of two opposite corners: the **Bottom-Left** and the **Top-Right**. There are a number of ways you can do this but below are 2 different options. 
+You need to tell the add-on exactly where to look. To do this, imagine drawing a rectangle over a map. The add-on needs to know the exact GPS coordinates of two opposite corners: the **Bottom-Left** and the **Top-Right**. The easiest way to do this is with BBoxFinder. 
 
 **How to find your coordinates using bboxfinder:**
 1. Go to [bboxfinder.com](http://bboxfinder.com).
