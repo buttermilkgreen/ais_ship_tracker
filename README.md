@@ -135,6 +135,7 @@ The add-on creates and updates a single entity by default: `sensor.last_passing_
 
 Attached to this entity is a set of attributes extracted directly from the vessel's radio transponder. Where you enable `Multi-ship Tracking`, all ship entities are created with the attributes below. 
 
+The following update every ~10 seconds for ships underway and ~3 minutes for ships at anchor/moored
 * **`mmsi`**: The Maritime Mobile Service Identity. This is a unique 9-digit number assigned to the vessel.
 * **`spotted_time`**: The exact local time the transponder data was received.
 * **`latitude`**: The exact GPS latitude coordinate.
@@ -143,7 +144,17 @@ Attached to this entity is a set of attributes extracted directly from the vesse
 * **`course`**: The vessel's direction of travel in degrees.
 * **`heading`**: The true direction the ship's bow is pointing in degrees.
 * **`navigational_status`**: The current operational state of the vessel (e.g., "Under way using engine", "At anchor", "Moored").
-* **`vessel_class`**: The class of the current vessel, either Class A (generally for commercial vessels) or Class B (generally for leisure vessels). 
+* **`vessel_class`**: The class of the current vessel, either Class A (generally for commercial vessels) or Class B (generally for leisure vessels).
+
+The following update every ~6 minutes for ships underway and at anchor/moored 
+* * **`Destination`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy. 
+* **`ETA`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy.
+* **`ship_length`**: The total physical length of the vessel in metres.
+* **`imo_number`**: The unique, permanent 7-digit identifier assigned to the hull.
+* **`call_sign`**: The vessel's unique alphanumeric maritime radio call sign.
+* **`vessel_type`**: The categorisation of the ship, such as "Cargo Ship", "Pleasure Craft", or "Search and Rescue".
+
+
 
 **Example of how this appears:**
 
