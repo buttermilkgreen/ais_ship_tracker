@@ -147,8 +147,8 @@ The following update every ~10 seconds for ships underway and ~3 minutes for shi
 * **`vessel_class`**: The class of the current vessel, either Class A (generally for commercial vessels) or Class B (generally for leisure vessels).
 
 The following update every ~6 minutes for ships underway and at anchor/moored 
-* * **`Destination`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy. 
-* **`ETA`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy.
+* **`destination`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy. 
+* **`eta`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy.
 * **`ship_length`**: The total physical length of the vessel in metres.
 * **`imo_number`**: The unique, permanent 7-digit identifier assigned to the hull.
 * **`call_sign`**: The vessel's unique alphanumeric maritime radio call sign.
@@ -160,23 +160,29 @@ The following update every ~6 minutes for ships underway and at anchor/moored
 
 ```yaml
 state:
-  translated: "7.9"
-  raw: "7.9"
-  last_changed: "2026-04-13T15:16:05.735Z"
-  last_updated: "2026-04-13T15:18:51.492Z"
+  translated: "11.9"
+  raw: "11.9"
+  last_changed: "2026-04-23T15:06:23.721Z"
+  last_updated: "2026-04-23T15:06:23.721Z"
 attributes:
-  friendly_name: FLATHOLM
-  ship_name: FLATHOLM
-  mmsi: "235014266"
-  spotted_time: "2026-04-13 16:18:51"
-  latitude: 50.851475
-  longitude: -1.3427016666666667
-  speed_knots: 7.9
-  course: 128.2
-  heading: 128
+  friendly_name: GOLDEN CALYPSO
+  ship_name: GOLDEN CALYPSO
+  mmsi: "352006081"
+  spotted_time: "2026-04-23 16:06:23"
+  latitude: 51.00354
+  longitude: 1.4393983333333333
+  speed_knots: 11.9
+  course: 227.8
+  heading: 227
   navigational_status: Under way using engine
   vessel_class: Class A
   icon: mdi:ferry
+  destination: GBFAW
+  eta: 24/04 01:00 UTC
+  ship_length: 156
+  imo_number: "1037713"
+  call_sign: "3E8544"
+  vessel_type: Tanker
 ```
 
 **Note:** When `Multi-ship Tracking` is enabled, entities are created for every ship that enters the bounding box. After the `Ship Entity Timeout` expires (default 30 minutes), ships will be removed from the map **but** they will remain in your Home Assistant entity list until the next Home Assistant restart. This is due to how the Home Assistant REST API works, in that you can only create and modify entities, but not delete them. 
