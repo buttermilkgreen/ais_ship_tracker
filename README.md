@@ -35,7 +35,7 @@ To install this add-on, you need to add this repository to your Home Assistant a
 
 8. Install [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) to allow you to have a map card with multiple ship entities 
 9. Install [Card-mod](https://github.com/thomasloven/lovelace-card-mod) to allow you to make the ship icons on the map smaller
-10. Section #4 has the yaml to configure a multi-ship map.
+10. There is more info on this in the docs below including the yaml to configure a multi-ship map.
 
 ---
 
