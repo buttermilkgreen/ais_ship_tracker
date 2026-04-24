@@ -143,7 +143,7 @@ The following update every ~6 minutes for ships underway and at anchor/moored
 * **`imo_number`**: The unique, permanent 7-digit identifier assigned to the hull.
 * **`call_sign`**: The vessel's unique alphanumeric maritime radio call sign.
 * **`vessel_type`**: The categorisation of the ship, such as "Cargo Ship", "Pleasure Craft", or "Search and Rescue".
-* * **`destination`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy. 
+* **`destination`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy. 
 * **`eta`**: The projected arrival time at the destination, formatted as DD/MM HH:MM UTC. Note this is manually updated by crew so can vary in quality and accuracy. 
 
 
@@ -245,4 +245,4 @@ mode: single
 ---
 ## 🐛 Issues or feedback?
 
-Please use [this form](https://forms.gle/KQDVQQpGf2LZofWA8) or raise a Github issue.  
+Please raise a Github issue.  
