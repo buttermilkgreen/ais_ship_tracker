@@ -243,6 +243,33 @@ mode: single
 
 
 ---
+## ⛵️ Vessel Type Mapping
+
+The `vessel_type` attribute comes from AISStream as a number, which is mapped to the particular vessel. Below are the possible variations. Note that the `vessel_type` attribute in the entity is the name, not the number. Any automations need to be against the name. 
+
+| Type Number(s) | Vessel Type Name |
+| :--- | :--- |
+| 20-29 | Wing in ground (WIG) |
+| 30 | Fishing |
+| 31-32 | Towing |
+| 33 | Dredging |
+| 34 | Diving Ops |
+| 35 | Military Ops |
+| 36 | Sailing |
+| 37 | Pleasure Craft |
+| 40-49 | High-Speed Craft |
+| 50 | Pilot Vessel |
+| 51 | Search and Rescue |
+| 52 | Tug |
+| 53 | Port Tender |
+| 54 | Anti-pollution Equipment |
+| 55 | Law Enforcement |
+| 60-69 | Passenger Ship |
+| 70-79 | Cargo Ship |
+| 80-89 | Tanker |
+| 90-99 | Other |
+
+---
 ## 🐛 Issues or feedback?
 
 Please raise a Github issue.  
