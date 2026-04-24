@@ -245,9 +245,9 @@ mode: single
 ---
 ## ⛵️ Vessel Type Mapping
 
-The `vessel_type` attribute comes from AISStream as a number, which is mapped to the particular vessel. Below are the possible variations. Note that the `vessel_type` attribute in the entity is the name, not the number. Any automations need to be against the name. 
+The `vessel_type` attribute comes from AISStream as a number, which is mapped to the particular vessel. Below are the possible variations. Note that the `vessel_type` attribute in the entity is the **Vessel Type Name**, not the Vessel Type Number. Any automations need to be against the name. 
 
-| Type Number(s) | Vessel Type Name |
+| Vessel Type Number | Vessel Type Name |
 | :--- | :--- |
 | 20-29 | Wing in ground (WIG) |
 | 30 | Fishing |
