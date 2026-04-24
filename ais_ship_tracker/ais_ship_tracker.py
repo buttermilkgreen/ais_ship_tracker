@@ -63,6 +63,7 @@ API_URL = "http://supervisor/core/api/states/sensor.last_passing_ship_dev" if DE
 # Dictionaries to track ships and rate limits
 seen_ships = {}
 last_map_update = {}
+static_ship_data = {}
 last_purge_time = datetime.now()
 last_known_error = ""
 current_conn_status = "Disconnected"
@@ -93,11 +94,34 @@ ICON_MAP = {
     14: "mdi:lifebuoy"
 }
 
-def startup_purge():
+def get_vessel_type_string(type_int):
+    if not isinstance(type_int, int): return None
+    if 20 <= type_int <= 29: return "Wing in ground (WIG)"
+    if type_int == 30: return "Fishing"
+    if type_int in (31, 32): return "Towing"
+    if type_int == 33: return "Dredging"
+    if type_int == 34: return "Diving Ops"
+    if type_int == 35: return "Military Ops"
+    if type_int == 36: return "Sailing"
+    if type_int == 37: return "Pleasure Craft"
+    if 40 <= type_int <= 49: return "High-Speed Craft"
+    if type_int == 50: return "Pilot Vessel"
+    if type_int == 51: return "Search and Rescue"
+    if type_int == 52: return "Tug"
+    if type_int == 53: return "Port Tender"
+    if type_int == 54: return "Anti-pollution Equipment"
+    if type_int == 55: return "Law Enforcement"
+    if 60 <= type_int <= 69: return "Passenger Ship"
+    if 70 <= type_int <= 79: return "Cargo Ship"
+    if 80 <= type_int <= 89: return "Tanker"
+    if 90 <= type_int <= 99: return "Other"
+    return None
+
+def sync_state_on_startup():
     if not SUPERVISOR_TOKEN:
         return
         
-    log("🧹 Clear Ship Entities on Startup enabled. Clearing...")
+    log("🔄 Synchronising Add-on memory with Home Assistant map...")
     api_url = "http://supervisor/core/api/states"
     headers = {"Authorization": f"Bearer {SUPERVISOR_TOKEN}"}
     
@@ -106,28 +130,83 @@ def startup_purge():
         with urllib.request.urlopen(req, timeout=15) as response:
             states = json.loads(response.read().decode('utf-8'))
             
-        purge_count = 0
+        restored_count = 0
+        purged_count = 0
         for state in states:
             entity_id = state.get("entity_id", "")
+            is_dev_entity = entity_id.endswith("_dev")
+            
+            # 1. Purge mismatched static entities
+            if entity_id.startswith("sensor.last_passing_ship") or entity_id.startswith("sensor.ais_connection_status"):
+                if is_dev_entity != DEV_MODE:
+                    purge_url = f"http://supervisor/core/api/states/{entity_id}"
+                    payload = {"state": "unavailable", "attributes": {}}
+                    data = json.dumps(payload).encode('utf-8')
+                    req = urllib.request.Request(purge_url, data=data, headers={"Authorization": f"Bearer {SUPERVISOR_TOKEN}"}, method='POST')
+                    try:
+                        urllib.request.urlopen(req, timeout=5)
+                        log(f"   ↳ Purged obsolete environment entity: {entity_id}")
+                    except: pass
+                continue
+                
             # Target dynamic map entities, but rigorously protect last_passing_ship
             if entity_id.startswith("sensor.ais_ship_") and "last_passing_ship" not in entity_id:
-                purge_url = f"http://supervisor/core/api/states/{entity_id}"
-                payload = {"state": "unavailable", "attributes": {}}
-                data = json.dumps(payload).encode('utf-8')
-                purge_req = urllib.request.Request(purge_url, data=data, headers=headers, method='POST')
+                attrs = state.get("attributes", {})
+                vessel_class = attrs.get("vessel_class", "Unknown")
+                mmsi = str(attrs.get("mmsi")) if attrs.get("mmsi") else entity_id.replace("sensor.ais_ship_", "").replace("_dev", "")
+                spotted_time = attrs.get("spotted_time")
                 
+                if not spotted_time:
+                    continue
+                    
                 try:
-                    urllib.request.urlopen(purge_req, timeout=5)
-                    purge_count += 1
-                except Exception as purge_err:
-                    log(f"Failed to purge entity {entity_id}: {purge_err}")
+                    parsed_time = datetime.strptime(spotted_time, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    continue
+                    
+                age_seconds = (datetime.now() - parsed_time).total_seconds()
                 
-        log(f"✅ Startup purge complete. Removed {purge_count} ghost entities.")
+                if (
+                    not ENABLE_MAP_ENTITIES or 
+                    CLEAR_MAP_ON_STARTUP or 
+                    age_seconds > (MAP_TIMEOUT_MINUTES * 60) or
+                    (not INCLUDE_CLASS_B and vessel_class == "Class B") or
+                    (is_dev_entity != DEV_MODE)
+                ):
+                    purge_url = f"http://supervisor/core/api/states/{entity_id}"
+                    payload = {"state": "unavailable", "attributes": {}}
+                    data = json.dumps(payload).encode('utf-8')
+                    purge_req = urllib.request.Request(purge_url, data=data, headers=headers, method='POST')
+                    
+                    try:
+                        urllib.request.urlopen(purge_req, timeout=5)
+                        purged_count += 1
+                        log(f"   ↳ Purged MMSI {mmsi} (Age: {int(age_seconds/60)}m)")
+                    except Exception as purge_err:
+                        log(f"Failed to purge entity {entity_id}: {purge_err}")
+                else:
+                    seen_ships[mmsi] = parsed_time
+                    last_map_update[mmsi] = parsed_time
+                    
+                    static_data = {}
+                    for key in ["destination", "eta", "ship_length", "imo_number", "call_sign", "vessel_type"]:
+                        if key in attrs and attrs[key] is not None and attrs[key] != "":
+                            static_data[key] = attrs[key]
+                            
+                    if static_data:
+                        static_ship_data[mmsi] = static_data
+                        
+                    restored_count += 1
+                    log(f"   ↳ Restored MMSI {mmsi} to memory (Age: {int(age_seconds/60)}m)")
+                
+        log(f"✅ Sync complete. Restored: {restored_count} active ships. Purged: {purged_count} stale ships.")
     except Exception as e:
-        log(f"⚠️ Failed to complete startup purge: {e}")
+        log(f"⚠️ Failed to complete startup sync: {e}")
 
 def update_map_entity(ship_data, remove=False):
-    if not ENABLE_MAP_ENTITIES or not SUPERVISOR_TOKEN:
+    if not SUPERVISOR_TOKEN:
+        return
+    if not ENABLE_MAP_ENTITIES and not remove:
         return
 
     mmsi = str(ship_data.get("mmsi", ""))
@@ -168,6 +247,21 @@ def update_map_entity(ship_data, remove=False):
             }
         }
         
+        static_info = static_ship_data.get(ship_data.get("mmsi"))
+        if static_info:
+            if "destination" in static_info and static_info["destination"]:
+                payload["attributes"]["destination"] = static_info["destination"]
+            if "eta" in static_info and static_info["eta"]:
+                payload["attributes"]["eta"] = static_info["eta"]
+            if "ship_length" in static_info and static_info["ship_length"] is not None:
+                payload["attributes"]["ship_length"] = static_info["ship_length"]
+            if "imo_number" in static_info and static_info["imo_number"] is not None:
+                payload["attributes"]["imo_number"] = static_info["imo_number"]
+            if "call_sign" in static_info and static_info["call_sign"]:
+                payload["attributes"]["call_sign"] = static_info["call_sign"]
+            if "vessel_type" in static_info and static_info["vessel_type"]:
+                payload["attributes"]["vessel_type"] = static_info["vessel_type"]
+        
     try:
         data = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(api_url, data=data, headers=headers, method='POST')
@@ -187,6 +281,8 @@ def purge_old_ships():
         del seen_ships[mmsi]
         if mmsi in last_map_update:
             del last_map_update[mmsi]
+        if mmsi in static_ship_data:
+            del static_ship_data[mmsi]
             
         # Strip entity from the map
         update_map_entity({"mmsi": mmsi}, remove=True)
@@ -286,7 +382,6 @@ def update_conn_status(status, new_error=None):
         log(f"Failed to update connection status entity: {e}")
 
 def on_message(ws, message_json):
-    global last_purge_time
     global last_known_error
     try:
         message = json.loads(message_json)
@@ -300,6 +395,72 @@ def on_message(ws, message_json):
             
         msg_type = message.get("MessageType")
         
+        if msg_type == "ShipStaticData":
+            mmsi = message.get("MetaData", {}).get("MMSI")
+            if mmsi:
+                static_msg = message.get("Message", {}).get("ShipStaticData", {})
+                dest = static_msg.get("Destination")
+                raw_eta = static_msg.get("Eta")
+                
+                eta = None
+                if isinstance(raw_eta, dict):
+                    month = raw_eta.get("Month", 0)
+                    day = raw_eta.get("Day", 0)
+                    hour = raw_eta.get("Hour", 0)
+                    minute = raw_eta.get("Minute", 0)
+                    if month > 0 and day > 0:
+                        eta = f"{day:02d}/{month:02d} {hour:02d}:{minute:02d} UTC"
+
+                dim = static_msg.get("Dimension", {})
+                
+                ship_length = None
+                if dim:
+                    to_bow = dim.get("A")
+                    to_stern = dim.get("B")
+                    if to_bow is not None and to_stern is not None:
+                        ship_length = to_bow + to_stern
+                
+                if dest:
+                    dest = dest.strip()
+                    
+                raw_imo = static_msg.get("ImoNumber")
+                imo_number = str(raw_imo) if isinstance(raw_imo, int) and raw_imo > 0 else None
+                
+                raw_call_sign = static_msg.get("CallSign")
+                call_sign = None
+                if isinstance(raw_call_sign, str):
+                    stripped_cs = raw_call_sign.strip()
+                    if stripped_cs and stripped_cs.isalnum():
+                        call_sign = stripped_cs
+                        
+                raw_type = static_msg.get("Type")
+                vessel_type = get_vessel_type_string(raw_type)
+                
+                is_new = mmsi not in static_ship_data
+                
+                static_data = {}
+                if dest:
+                    static_data["destination"] = dest
+                if eta:
+                    static_data["eta"] = eta
+                if ship_length is not None:
+                    static_data["ship_length"] = ship_length
+                if imo_number is not None:
+                    static_data["imo_number"] = imo_number
+                if call_sign is not None:
+                    static_data["call_sign"] = call_sign
+                if vessel_type is not None:
+                    static_data["vessel_type"] = vessel_type
+                    
+                if is_new and static_data:
+                    ship_len_str = f"{ship_length}m" if ship_length is not None else "Unknown"
+                    log(f"📋 Mapped new static data for MMSI {mmsi} (Dest: {dest}, ETA: {eta}, Length: {ship_len_str}, Type: {vessel_type})")
+                
+                if static_data:
+                    static_ship_data[mmsi] = static_data
+                    
+            return
+            
         # Determine vessel class based on message type
         if msg_type == "PositionReport":
             vessel_class = "Class A"
@@ -356,12 +517,6 @@ def on_message(ws, message_json):
                 # If it's not a brand new ship, log the 60-second update so we can verify it's working
                 if last_updated is not None:
                     log(f"🗺️ Map Updated: {name} ({vessel_class} | MMSI: {mmsi}) | Lat: {ship_data.get('latitude')}, Lon: {ship_data.get('longitude')}")
-            
-            # Run memory cleanup periodically based on time, not ship count
-            if (now - last_purge_time).total_seconds() >= 60:
-                purge_old_ships()
-                update_conn_status(current_conn_status)
-                last_purge_time = now
                 
     except json.JSONDecodeError as e:
         log(f"JSON Decode Error: Received malformed data from AISStream - {e}")
@@ -387,11 +542,19 @@ def on_close(ws, close_status_code, close_msg):
     log(f"⚠️ Disconnect Reason: {error_reason}")
     update_conn_status("Disconnected", new_error=error_reason)
 
+def on_pong(ws, message):
+    global last_purge_time
+    now = datetime.now()
+    if (now - last_purge_time).total_seconds() >= 60:
+        purge_old_ships()
+        update_conn_status(current_conn_status)
+        last_purge_time = now
+
 def on_open(ws):
     log("🟢 Connected! Monitoring the water...")
     update_conn_status("Connected")
     
-    filter_types = ["PositionReport"]
+    filter_types = ["PositionReport", "ShipStaticData"]
     if INCLUDE_CLASS_B:
         filter_types.extend(["StandardClassBPositionReport", "ExtendedClassBPositionReport"])
         
@@ -413,9 +576,9 @@ def start_tracker():
     log(f"🚢 Tracker Mode: {mode_str}")
 
     if DEV_MODE:
-        log("[DEV] [1.2.0] Connecting to AISStream...")
+        log("[DEV] [1.3.0] Connecting to AISStream...")
     else:
-        log("[PROD] [1.2.0] Connecting to AISStream...")
+        log("[PROD] [1.3.0] Connecting to AISStream...")
         
     update_conn_status("Connecting")
     
@@ -424,7 +587,8 @@ def start_tracker():
         on_open=on_open,
         on_message=on_message,
         on_error=on_error,
-        on_close=on_close
+        on_close=on_close,
+        on_pong=on_pong
     )
     
     ws.run_forever(ping_interval=60, ping_timeout=10)
@@ -439,8 +603,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, graceful_shutdown)
     signal.signal(signal.SIGINT, graceful_shutdown)
 
-    if CLEAR_MAP_ON_STARTUP:
-        startup_purge()
+    sync_state_on_startup()
         
     try:
         while True:

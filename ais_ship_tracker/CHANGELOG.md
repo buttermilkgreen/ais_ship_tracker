@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+* [Feature] Additional attributes added. Note these are all part of ShipStaticData and update every ~6 minutes:
+  * ship_length: The total physical length of the vessel in metres
+  * imo_number: The unique, permanent 7-digit identifier assigned to the hull
+  * call_sign: The vessel's unique alphanumeric maritime radio call sign
+  * vessel_type: The categorisation of the ship, such as "Cargo Ship", "Pleasure Craft", or "Search and Rescue".
+  * destination: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so may be inaccurate
+  * eta: The projected arrival time at the destination, formatted as DD/MM HH:MM UTC. Note this is manually updated by crew so may be inaccurate
+* [Feature] Added documentation tab to the add-on
+* [Fix] Stale ships are now reliably removed in general and on restart
+* [Fix] Config changes are properly applied on restart
+
+
 ## 1.2.1
 * [Fix] Ordered bounding box fields in config to match values from bboxfinder.com for easier input
 
