@@ -19,7 +19,7 @@ You can also track multiple vessels and show them on a map. The [auto-entities](
 
 ---
 
-## 🛠️ 1. Installation
+## 🛠️ Installation
 
 To install this add-on, you need to add this repository to your Home Assistant add-on Store. 
 
@@ -39,7 +39,7 @@ To install this add-on, you need to add this repository to your Home Assistant a
 
 ---
 
-## 🔑 2. Getting Your API Key
+## 🔑 Getting Your API Key
 
 This add-on relies on [AISStream.io](https://aisstream.io), a free, community-driven network of radio receivers. To use it, you need a personal API key.
 
@@ -49,7 +49,7 @@ This add-on relies on [AISStream.io](https://aisstream.io), a free, community-dr
 
 ---
 
-## 🗺️ 3. Drawing Your Bounding Box
+## 🗺️ Drawing Your Bounding Box
 
 You need to tell the add-on exactly where to look. To do this, imagine drawing a rectangle over a map. The add-on needs to know the exact GPS coordinates of two opposite corners: the **Bottom-Left** and the **Top-Right**. The easiest way to do this is with BBoxFinder. 
 
@@ -65,7 +65,7 @@ You need to tell the add-on exactly where to look. To do this, imagine drawing a
    * **Fourth number:** Paste into `Top-Right Latitude (North)`
 
 ---
-## 📍 4. Multi-Ship Tracking (Map Card)
+## 📍 Multi-Ship Tracking (Map Card)
 You can track multiple ships simultaneously for viewing on a map. The [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) custom card from HACS is required for dynamically displaying these vessels. The official HA Map card will not populate dynamically. Given this add on creates entities for ships as they enter our bounding box, it needs this alternative map solution.  
 [Card-mod](https://github.com/thomasloven/lovelace-card-mod) is also recommended to make the ship icons smaller using CSS.
 
@@ -137,7 +137,7 @@ The following update every ~10 seconds for ships underway and ~3 minutes for shi
 * **`navigational_status`**: The current operational state of the vessel (e.g., "Under way using engine", "At anchor", "Moored").
 * **`vessel_class`**: The class of the current vessel, either Class A (generally for commercial vessels) or Class B (generally for leisure vessels).
 
-The following update every ~6 minutes for ships underway and at anchor/moored 
+The following update every ~6 minutes for ships underway and at anchor/moored:
 
 * **`ship_length`**: The total physical length of the vessel in metres.
 * **`imo_number`**: The unique, permanent 7-digit identifier assigned to the hull.
@@ -180,7 +180,7 @@ attributes:
 **Note:** When `Multi-ship Tracking` is enabled, entities are created for every ship that enters the bounding box. After the `Ship Entity Timeout` expires (default 30 minutes), ships will be removed from the map **but** they will remain in your Home Assistant entity list until the next Home Assistant restart. This is due to how the Home Assistant REST API works, in that you can only create and modify entities, but not delete them. 
 
 ---
-## 🛠️ 5. Config Specifics
+## 🛠️ Config Specifics
 
 * **`API Key`**: The free API key you need to generate from [AISStream.io](https://aisstream.io).
 * **`Bounding Box - Bottom-Left Longitude (West)`**: Left edge of the bounding box and the first number from bboxfinder co-ordinates.
@@ -189,9 +189,9 @@ attributes:
 * **`Bounding Box - Top-Right Latitude (North)`**: Top edge of the bounding box and the fourth number from bboxfinder co-ordinates.
 * **`Include Class B Vessels`**: Class B vessels (typically leisure craft) will be shown
 * **`Multi-Ship Tracking`**: Creates new entities for all ships that enter the bounding box in the format `sensor.ais_ship_{mmsi}`
-* **`Ship Entity Timeout (Minutes)`**: The current operational state of the vessel (e.g., "Under way using engine", "At anchor", "Moored").
-* **`Clear Ship Entities on Startup`**: How long before ships are cleared from the map after receiving no updates
-* **`Test Mode`**: The main sensors will stop updating and all sensors will be appended with `_dev`. For example `sensor.last_passing_ship_dev`, `sensor.ais_connection_status_dev`, `sensor.ais_ship_{mmsi}`
+* **`Ship Entity Timeout (Minutes)`**: How long before ships are cleared from the map after receiving no updates.
+* **`Clear Ship Entities on Startup`**: Clears all ship entities from the map when add-on starts.
+* **`Test Mode`**: The main sensors will stop updating and all sensors will be appended with `_dev`. For example `sensor.last_passing_ship_dev`, `sensor.ais_connection_status_dev`, `sensor.ais_ship_{mmsi}_dev`
 
 
 ---
