@@ -8,22 +8,13 @@ You can also track multiple vessels and show them on a map. The [auto-entities](
 
 **Dashboard Example**
 
-<img width="555" height="500" alt="Dashboard Example" src="https://github.com/user-attachments/assets/e3bc48e3-13aa-43c6-af5b-a0311da23429" />
-
----
-
-**More Info**
-
-Speed shown in knots
-
-<img width="285" height="266" alt="More Info Pop Up" src="https://github.com/user-attachments/assets/0da1a1b3-01ed-4720-87ac-04caaf5e14e1" />
+<img width="640" height="441" alt="Dashboard Example" src="https://github.com/user-attachments/assets/1a4e671f-60b4-4144-b426-e8ffdf0148a9" />
 
 ---
 
 **More Info - Attributes** 
 
-<img width="280" height="360" alt="More Info Attributes" src="https://github.com/user-attachments/assets/12040294-411b-4d58-853b-5601ece31d91" />
-
+<img width="196" height="320" alt="More Info Attributes" src="https://github.com/user-attachments/assets/90077aad-f351-4145-8c90-4f2bdc167eb4" />
 
 
 ---
@@ -147,12 +138,13 @@ The following update every ~10 seconds for ships underway and ~3 minutes for shi
 * **`vessel_class`**: The class of the current vessel, either Class A (generally for commercial vessels) or Class B (generally for leisure vessels).
 
 The following update every ~6 minutes for ships underway and at anchor/moored 
-* **`destination`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy. 
-* **`eta`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy.
+
 * **`ship_length`**: The total physical length of the vessel in metres.
 * **`imo_number`**: The unique, permanent 7-digit identifier assigned to the hull.
 * **`call_sign`**: The vessel's unique alphanumeric maritime radio call sign.
 * **`vessel_type`**: The categorisation of the ship, such as "Cargo Ship", "Pleasure Craft", or "Search and Rescue".
+* * **`destination`**: The intended port or location the vessel is sailing towards. Note this is manually updated by crew so can vary in quality and accuracy. 
+* **`eta`**: The projected arrival time at the destination, formatted as DD/MM HH:MM UTC. Note this is manually updated by crew so can vary in quality and accuracy. 
 
 
 
