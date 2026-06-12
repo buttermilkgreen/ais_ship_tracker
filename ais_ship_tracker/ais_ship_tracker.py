@@ -18,6 +18,8 @@ def log(message):
         # Fallback for Docker environments that don't support UTF-8 emojis
         print(f"[{timestamp}] {message.encode('ascii', 'ignore').decode('ascii')}", flush=True)
 
+watchlist_mmsis = []
+
 try:
     # --- Load Configuration from Home Assistant UI ---
     with open('/data/options.json') as f:
@@ -50,6 +52,21 @@ try:
     
     class_b_val = config.get('include_class_b', True)
     INCLUDE_CLASS_B = str(class_b_val).lower() in ['true', '1', 't', 'y', 'yes'] if class_b_val is not None else True
+
+    vessel_watchlist_raw = config.get('vessel_watchlist', '')
+    if vessel_watchlist_raw:
+        for item in vessel_watchlist_raw.split(','):
+            if not item.strip():
+                continue
+            # Sanitisation: strip all whitespace
+            cleaned = "".join(item.split())
+            # Remove any non-numeric characters
+            numeric_only = "".join(c for c in cleaned if c.isdigit())
+            # Validation
+            if len(numeric_only) == 9:
+                watchlist_mmsis.append(numeric_only)
+            else:
+                log(f"⚠️ Invalid MMSIs in filter box ignored: '{item.strip()}' (Must be 9 digits)")
 
 except Exception as e:
     print(f"❌ FATAL ERROR loading configuration: {e}", flush=True)
@@ -121,7 +138,7 @@ def sync_state_on_startup():
     if not SUPERVISOR_TOKEN:
         return
         
-    log("🔄 Synchronising Add-on memory with Home Assistant map...")
+    log("🔄 Synchronising Add-on memory with Home Assistant database...")
     api_url = "http://supervisor/core/api/states"
     headers = {"Authorization": f"Bearer {SUPERVISOR_TOKEN}"}
     
@@ -171,7 +188,8 @@ def sync_state_on_startup():
                     CLEAR_MAP_ON_STARTUP or 
                     age_seconds > (MAP_TIMEOUT_MINUTES * 60) or
                     (not INCLUDE_CLASS_B and vessel_class == "Class B") or
-                    (is_dev_entity != DEV_MODE)
+                    (is_dev_entity != DEV_MODE) or
+                    (watchlist_mmsis and mmsi not in watchlist_mmsis)
                 ):
                     purge_url = f"http://supervisor/core/api/states/{entity_id}"
                     payload = {"state": "unavailable", "attributes": {}}
@@ -268,7 +286,7 @@ def update_map_entity(ship_data, remove=False):
         with urllib.request.urlopen(req, timeout=10) as response:
             pass
     except Exception as e:
-        log(f"Failed to update map entity for MMSI {mmsi}: {e}")
+        log(f"Failed to update entity for MMSI {mmsi}: {e}")
 
 def purge_old_ships():
    # Removes ships from memory and the map that haven't been seen recently 
@@ -288,7 +306,7 @@ def purge_old_ships():
         update_map_entity({"mmsi": mmsi}, remove=True)
     
     if expired_mmsi:
-        log(f"🧹 Purged {len(expired_mmsi)} stale ships from memory and the map.")
+        log(f"🧹 Purged {len(expired_mmsi)} stale ships from memory and any maps.")
 
 def update_ha_entity(ship_data):
     if not SUPERVISOR_TOKEN:
@@ -454,7 +472,7 @@ def on_message(ws, message_json):
                     
                 if is_new and static_data:
                     ship_len_str = f"{ship_length}m" if ship_length is not None else "Unknown"
-                    log(f"📋 Mapped new static data for MMSI {mmsi} (Dest: {dest}, ETA: {eta}, Length: {ship_len_str}, Type: {vessel_type})")
+                    log(f"📋 Added new static data for MMSI {mmsi} (Dest: {dest}, ETA: {eta}, Length: {ship_len_str}, Type: {vessel_type})")
                 
                 if static_data:
                     static_ship_data[mmsi] = static_data
@@ -516,7 +534,7 @@ def on_message(ws, message_json):
                 
                 # If it's not a brand new ship, log the 60-second update so we can verify it's working
                 if last_updated is not None:
-                    log(f"🗺️ Map Updated: {name} ({vessel_class} | MMSI: {mmsi}) | Lat: {ship_data.get('latitude')}, Lon: {ship_data.get('longitude')}")
+                    log(f"🗺️ Ship Updated: {name} ({vessel_class} | MMSI: {mmsi}) | Lat: {ship_data.get('latitude')}, Lon: {ship_data.get('longitude')}")
                 
     except json.JSONDecodeError as e:
         log(f"JSON Decode Error: Received malformed data from AISStream - {e}")
@@ -563,6 +581,10 @@ def on_open(ws):
         "BoundingBoxes": BOUNDING_BOX,
         "FilterMessageTypes": filter_types
     }
+    
+    if watchlist_mmsis:
+        subscription_message["FiltersShipMMSI"] = watchlist_mmsis
+        
     ws.send(json.dumps(subscription_message))
 
 def start_tracker():
@@ -575,10 +597,15 @@ def start_tracker():
     mode_str = "All Vessels (Class A & B)" if INCLUDE_CLASS_B else "Commercial Only (Class A)"
     log(f"🚢 Tracker Mode: {mode_str}")
 
-    if DEV_MODE:
-        log("[DEV] [1.3.0] Connecting to AISStream...")
+    if watchlist_mmsis:
+        log(f"🎯 Filtering active for {len(watchlist_mmsis)} MMSI(s).")
     else:
-        log("[PROD] [1.3.0] Connecting to AISStream...")
+        log("🌐 Monitoring all vessels within the bounding box (no filters active).")
+
+    if DEV_MODE:
+        log("[DEV] [1.4.0] Connecting to AISStream...")
+    else:
+        log("[PROD] [1.4.0] Connecting to AISStream...")
         
     update_conn_status("Connecting")
     

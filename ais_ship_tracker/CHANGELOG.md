@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.0
+* [Feature] Filter ships by MMSI. Enter one or many MMSI numbers (separated by commas) into the filter field in the config to only show those ships. 
+
 ## 1.3.0
 * [Feature] Additional attributes added. Note these are all part of ShipStaticData and update every ~6 minutes:
   * ship_length: The total physical length of the vessel in metres

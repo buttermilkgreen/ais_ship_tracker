@@ -20,6 +20,9 @@ configuration:
   enable_map_entities:
     name: Multi-Ship Tracking
     description: Creates an individual sensor for every tracked ship. Recommend the auto-entities plugin to show these on a map. card. 
+  vessel_watchlist:
+    name: MMSI Filter
+    description: Only track vessels with these MMSI numbers. Separate MMSIs with commas.
   map_timeout_minutes:
     name: Ship Entity Timeout (Minutes)
     description: How long before a ship with no new tracking data is removed from the map.
