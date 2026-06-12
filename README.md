@@ -189,6 +189,7 @@ attributes:
 * **`Bounding Box - Top-Right Latitude (North)`**: Top edge of the bounding box and the fourth number from bboxfinder co-ordinates.
 * **`Include Class B Vessels`**: Class B vessels (typically leisure craft) will be shown
 * **`Multi-Ship Tracking`**: Creates new entities for all ships that enter the bounding box in the format `sensor.ais_ship_{mmsi}`
+* **`MMSI Filter`**: Only shows ships with the MMSI(s) you specify. Separate each MMSI with a comma.
 * **`Ship Entity Timeout (Minutes)`**: How long before ships are cleared from the map after receiving no updates.
 * **`Clear Ship Entities on Startup`**: Clears all ship entities from the map when add-on starts.
 * **`Test Mode`**: The main sensors will stop updating and all sensors will be appended with `_dev`. For example `sensor.last_passing_ship_dev`, `sensor.ais_connection_status_dev`, `sensor.ais_ship_{mmsi}_dev`
