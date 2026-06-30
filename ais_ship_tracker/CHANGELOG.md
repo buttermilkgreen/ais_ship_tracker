@@ -1,7 +1,10 @@
 # Changelog
 
+## 1.4.5
+* [Feature] The connectivity status entity (sensor.ais_connection_status) is now integrated with Buttermilkgreen uptime monitor API (https://aisuptime.buttermilkgreen.fyi/). This can be disabled or you can add a custom URL if you are self hosting the uptime monitor. If disabled, the entity will show connectivity status relative to your connection to the AISStream websocket. Note: If you were using the specific responses sent by the API before for any automations, these will be different when using the Uptime API connection. See docs for responses. 
+
 ## 1.4.0
-* [Feature] Filter ships by MMSI. Enter one or many MMSI numbers (separated by commas) into the filter field in the config to only show those ships. 
+* [Feature] Filter ships by MMSI. Enter one or many MMSI numbers (comma separated) into the filter field in the config to only show those ships. 
 
 ## 1.3.0
 * [Feature] Additional attributes added. Note these are all part of ShipStaticData and update every ~6 minutes:

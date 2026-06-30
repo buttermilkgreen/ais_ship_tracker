@@ -9,6 +9,7 @@ import sys
 from datetime import datetime, timedelta
 
 print("🚀 Starting AIS Ship Tracker...", flush=True)
+VERSION = "1.4.5"
 
 def log(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -31,27 +32,37 @@ try:
         try: return int(val)
         except: return default
 
-    AIS_API_KEY = config['api_key']
-    lat_south = float(config['latitude_south'])
-    lon_west = float(config['longitude_west'])
-    lat_north = float(config['latitude_north'])
-    lon_east = float(config['longitude_east'])
+    AIS_API_KEY = config.get('api_key', '')
+    lat_south = float(config.get('latitude_south', 50.90))
+    lon_west = float(config.get('longitude_west', 1.20))
+    lat_north = float(config.get('latitude_north', 51.20))
+    lon_east = float(config.get('longitude_east', 1.80))
     BOUNDING_BOX = [[[lat_south, lon_west], [lat_north, lon_east]]]
     
     dev_val = config.get('dev_mode', False)
     DEV_MODE = str(dev_val).lower() in ['true', '1', 't', 'y', 'yes'] if dev_val is not None else False
 
-    # Version 1.2.0 Additions - Safely parse to avoid NoneType errors from HA config UI
-    map_val = config.get('enable_map_entities', True)
-    ENABLE_MAP_ENTITIES = str(map_val).lower() in ['true', '1', 't', 'y', 'yes'] if map_val is not None else True
+    # Version 1.2.0 Additions
+    map_val = config.get('enable_map_entities', False)
+    ENABLE_MAP_ENTITIES = str(map_val).lower() in ['true', '1', 't', 'y', 'yes'] if map_val is not None else False
     
     MAP_TIMEOUT_MINUTES = get_safe_int('map_timeout_minutes', 30)
     
-    clear_val = config.get('clear_map_on_startup', True)
-    CLEAR_MAP_ON_STARTUP = str(clear_val).lower() in ['true', '1', 't', 'y', 'yes'] if clear_val is not None else True
+    clear_val = config.get('clear_map_on_startup', False)
+    CLEAR_MAP_ON_STARTUP = str(clear_val).lower() in ['true', '1', 't', 'y', 'yes'] if clear_val is not None else False
     
     class_b_val = config.get('include_class_b', True)
     INCLUDE_CLASS_B = str(class_b_val).lower() in ['true', '1', 't', 'y', 'yes'] if class_b_val is not None else True
+
+    # Version 1.5.0 Additions - API Uptime Monitoring
+    api_monitor_val = config.get('enable_api_monitoring', True)
+    ENABLE_API_MONITORING = str(api_monitor_val).lower() in ['true', '1', 't', 'y', 'yes'] if api_monitor_val is not None else True
+    default_monitor_url = 'http://192.168.4.138/api/v1/status?simple=true' if DEV_MODE else 'https://aisuptime.buttermilkgreen.fyi/api/v1/status?simple=true'
+    API_MONITORING_URL = config.get('api_monitoring_url', default_monitor_url)
+    API_MONITORING_INTERVAL = get_safe_int('api_monitoring_interval', 60)
+    # Clamp interval to minimum 10 seconds to avoid spamming the endpoint
+    if API_MONITORING_INTERVAL < 10:
+        API_MONITORING_INTERVAL = 10
 
     vessel_watchlist_raw = config.get('vessel_watchlist', '')
     if vessel_watchlist_raw:
@@ -73,6 +84,23 @@ except Exception as e:
     import sys
     sys.exit(1)
 
+import uuid
+# --- Load or Generate Persistent UUID ---
+UUID_FILE_PATH = "/data/tracker_uuid.txt"
+try:
+    if os.path.exists(UUID_FILE_PATH):
+        with open(UUID_FILE_PATH, "r") as f:
+            TRACKER_UUID = f.read().strip()
+    else:
+        TRACKER_UUID = str(uuid.uuid4())
+        with open(UUID_FILE_PATH, "w") as f:
+            f.write(TRACKER_UUID)
+    log(f"Tracker UUID initialized: {TRACKER_UUID[:8]}...")
+except Exception as e:
+    # Fallback to a temporary UUID if file system fails
+    TRACKER_UUID = str(uuid.uuid4())
+    log(f"⚠️ Failed to manage persistent UUID file (using ephemeral ID): {e}")
+
 # Home Assistant API Configuration
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
 API_URL = "http://supervisor/core/api/states/sensor.last_passing_ship_dev" if DEV_MODE else "http://supervisor/core/api/states/sensor.last_passing_ship"
@@ -84,6 +112,7 @@ static_ship_data = {}
 last_purge_time = datetime.now()
 last_known_error = ""
 current_conn_status = "Disconnected"
+shutdown_in_progress = False
 
 # Backoff variables to prevent AISStream API concurrency lockouts
 RECONNECT_DELAY = 5
@@ -136,6 +165,7 @@ def get_vessel_type_string(type_int):
 
 def sync_state_on_startup():
     if not SUPERVISOR_TOKEN:
+        log("⚠️ SUPERVISOR_TOKEN is not set. Home Assistant API integration is disabled (running in standalone mode?).")
         return
         
     log("🔄 Synchronising Add-on memory with Home Assistant database...")
@@ -284,7 +314,10 @@ def update_map_entity(ship_data, remove=False):
         data = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(api_url, data=data, headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=10) as response:
-            pass
+            if remove:
+                log(f"   ↳ HA API: Removed map entity {entity_id}")
+            else:
+                log(f"   ↳ HA API: Updated map entity {entity_id} (State: {payload['state']} SOG)")
     except Exception as e:
         log(f"Failed to update entity for MMSI {mmsi}: {e}")
 
@@ -310,7 +343,7 @@ def purge_old_ships():
 
 def update_ha_entity(ship_data):
     if not SUPERVISOR_TOKEN:
-        log("Error: SUPERVISOR_TOKEN not found. Are you running this inside a HA Add-on?")
+        log("⚠️ SUPERVISOR_TOKEN not found. Are you running this inside a HA Add-on?")
         return
 
     headers = {
@@ -340,10 +373,19 @@ def update_ha_entity(ship_data):
         data = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(API_URL, data=data, headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=10) as response:
-            pass 
+            entity_id = "sensor.last_passing_ship_dev" if DEV_MODE else "sensor.last_passing_ship"
+            log(f"   ↳ HA API: Updated last passing ship entity {entity_id} (State: {payload['state']})")
             
     except urllib.error.URLError as e:
         log(f"Failed to update Home Assistant API: {e}")
+
+# Background Monitoring State
+api_monitor_state = {
+    "state": "Unknown",
+    "lastChecked": None,
+    "lastMessageReceived": None,
+    "error": None
+}
 
 def update_conn_status(status, new_error=None):
     global last_known_error
@@ -373,21 +415,49 @@ def update_conn_status(status, new_error=None):
         else:
             sanitised_error = str(last_known_error)
 
-    if status == "Connected":
-        icon = "mdi:api"
-    elif status in ["Connecting", "Reconnecting"]:
-        icon = "mdi:api-off"
+    if ENABLE_API_MONITORING:
+        # Set state to what was fetched from the API
+        state_value = api_monitor_state["state"]
+        
+        # Use appropriate icon depending on the API state
+        state_lower = str(state_value).lower()
+        if "up" in state_lower:
+            icon = "mdi:api"
+        elif "down" in state_lower or "silent" in state_lower or "auth" in state_lower or "error" in state_lower or "unavailable" in state_lower:
+            icon = "mdi:api-off"
+        else:
+            icon = "mdi:cloud-off-outline"
+            
+        attributes = {
+            "friendly_name": "AIS Ship Tracker Connection Status (Dev)" if DEV_MODE else "AIS Ship Tracker Connection Status",
+            "last_update_attempt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "websocket_status": status,
+            "websocket_error": sanitised_error,
+            "monitored_url": API_MONITORING_URL,
+            "lastChecked": api_monitor_state["lastChecked"],
+            "lastMessageReceived": api_monitor_state["lastMessageReceived"],
+            "api_error": api_monitor_state["error"],
+            "icon": icon
+        }
     else:
-        icon = "mdi:cloud-off-outline"
-
-    payload = {
-        "state": status,
-        "attributes": {
+        state_value = status
+        if status == "Connected":
+            icon = "mdi:api"
+        elif status in ["Connecting", "Reconnecting"]:
+            icon = "mdi:api-off"
+        else:
+            icon = "mdi:cloud-off-outline"
+            
+        attributes = {
             "friendly_name": "AIS Ship Tracker Connection Status (Dev)" if DEV_MODE else "AIS Ship Tracker Connection Status",
             "last_update_attempt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "error_message": sanitised_error,
             "icon": icon
         }
+
+    payload = {
+        "state": state_value,
+        "attributes": attributes
     }
     
     try:
@@ -398,6 +468,122 @@ def update_conn_status(status, new_error=None):
             pass
     except Exception as e:
         log(f"Failed to update connection status entity: {e}")
+
+# Periodic background thread for checking the external API
+def api_monitor_worker():
+    import threading
+    
+    def check_api():
+        while True:
+            if not ENABLE_API_MONITORING:
+                time.sleep(10)
+                continue
+                
+            # Build the anonymous telemetry payload
+            telemetry_payload = {
+                "uuid": TRACKER_UUID,
+                "version": VERSION,
+                "enable_map_entities": ENABLE_MAP_ENTITIES,
+                "include_class_b": INCLUDE_CLASS_B,
+                "clear_map_on_startup": CLEAR_MAP_ON_STARTUP,
+                "map_timeout_minutes": MAP_TIMEOUT_MINUTES,
+                "enable_api_monitoring": ENABLE_API_MONITORING,
+                "watchlist_count": len(watchlist_mmsis)
+            }
+            
+            try:
+                # 1. Attempt POST with Telemetry
+                data = json.dumps(telemetry_payload).encode('utf-8')
+                req = urllib.request.Request(
+                    API_MONITORING_URL, 
+                    data=data,
+                    headers={
+                        "User-Agent": "AIS-Ship-Tracker-Addon",
+                        "Content-Type": "application/json"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    res_data = json.loads(response.read().decode('utf-8'))
+            except urllib.error.HTTPError as http_err:
+                # Helper to update HA sensor state on failure
+                api_monitor_state["state"] = "Status Unavailable"
+                api_monitor_state["error"] = str(http_err)
+                update_conn_status(current_conn_status)
+
+                # Fallback: If 405 Method Not Allowed or 400 Bad Request, retry as standard GET
+                if http_err.code in [400, 405]:
+                    log(f"Uptime URL does not support POST (Status {http_err.code}). Falling back to GET.")
+                    try:
+                        req = urllib.request.Request(API_MONITORING_URL, headers={"User-Agent": "AIS-Ship-Tracker-Addon"})
+                        with urllib.request.urlopen(req, timeout=10) as response:
+                            res_data = json.loads(response.read().decode('utf-8'))
+                    except Exception as fallback_err:
+                        log(f"Failed fallback GET check: {fallback_err}")
+                        api_monitor_state["error"] = str(fallback_err)
+                        update_conn_status(current_conn_status)
+                        time.sleep(API_MONITORING_INTERVAL)
+                        continue
+                else:
+                    log(f"API monitoring HTTP error: {http_err}")
+                    time.sleep(API_MONITORING_INTERVAL)
+                    continue
+            except Exception as e:
+                log(f"API monitoring connection error: {e}")
+                api_monitor_state["state"] = "Status Unavailable"
+                api_monitor_state["error"] = str(e)
+                update_conn_status(current_conn_status)
+                time.sleep(API_MONITORING_INTERVAL)
+                continue
+
+            # Dynamically use whatever "state" key returns without hardcoding values
+            api_state = res_data.get("state", "Unknown")
+            last_checked_str = res_data.get("lastChecked")
+            last_msg_str = res_data.get("lastMessageReceived")
+            
+            # Verify age of timestamps
+            stale = False
+            for ts_str in [last_checked_str, last_msg_str]:
+                if ts_str:
+                    try:
+                        # Clean up ISO formats ending with Z or offset
+                        clean_ts = ts_str.replace("Z", "+00:00")
+                        # Try parsing with datetime.fromisoformat
+                        ts_dt = datetime.fromisoformat(clean_ts)
+                        # Get current UTC time
+                        utc_now = datetime.now(tz=ts_dt.tzinfo)
+                        age_seconds = (utc_now - ts_dt).total_seconds()
+                        if age_seconds > (API_MONITORING_INTERVAL * 5):
+                            stale = True
+                    except Exception as parse_err:
+                        # Fallback if parsing fails - don't mark stale
+                        pass
+                        
+            if stale:
+                new_state = "No Vessel Data"
+            else:
+                new_state = api_state
+                
+            if new_state != api_monitor_state["state"]:
+                log(f"API status changed from {api_monitor_state['state']} to {new_state}")
+            
+            api_monitor_state["state"] = new_state
+            api_monitor_state["lastChecked"] = last_checked_str
+            api_monitor_state["lastMessageReceived"] = last_msg_str
+            api_monitor_state["error"] = None
+            
+            # Trigger Home Assistant entity update with the latest statuses
+            update_conn_status(current_conn_status)
+            
+            time.sleep(API_MONITORING_INTERVAL)
+
+    t = threading.Thread(target=check_api, daemon=True)
+    t.start()
+
+# Start the background monitor thread on startup
+if ENABLE_API_MONITORING:
+    api_monitor_worker()
+
 
 def on_message(ws, message_json):
     global last_known_error
@@ -548,6 +734,10 @@ def on_error(ws, error):
     update_conn_status("Disconnected", new_error=str(error))
 
 def on_close(ws, close_status_code, close_msg):
+    if shutdown_in_progress:
+        log("❌ Connection closed (Shutdown in progress).")
+        return
+
     log("❌ Connection closed by server. Will attempt to reconnect...")
     
     # Add a helpful hint if the server drops us instantly without a word (usually an API key issue)
@@ -602,10 +792,13 @@ def start_tracker():
     else:
         log("🌐 Monitoring all vessels within the bounding box (no filters active).")
 
-    if DEV_MODE:
-        log("[DEV] [1.4.0] Connecting to AISStream...")
+    if ENABLE_MAP_ENTITIES:
+        log("🗺️ Multi-Ship Map Entities: ENABLED (individual vessel tracking entities will be created).")
     else:
-        log("[PROD] [1.4.0] Connecting to AISStream...")
+        log("ℹ️ Multi-Ship Map Entities: DISABLED (only the 'last passing ship' and connection status entities will be updated).")
+
+    env_str = "DEV" if DEV_MODE else "PROD"
+    log(f"[{env_str}] [{VERSION}] Connecting to AISStream...")
         
     update_conn_status("Connecting")
     
@@ -621,6 +814,8 @@ def start_tracker():
     ws.run_forever(ping_interval=60, ping_timeout=10)
 
 def graceful_shutdown(signum, frame):
+    global shutdown_in_progress
+    shutdown_in_progress = True
     log("🛑 Received stop signal from Home Assistant. Shutting down gracefully...")
     update_conn_status("Stopped", new_error="Add-on stopped by user or system.")
     log("🛑 Tracker safely stopped.")

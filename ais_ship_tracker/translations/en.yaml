@@ -14,21 +14,24 @@ configuration:
   latitude_north:
     name: Bounding Box - Top-Right Latitude (North)
     description: Top edge of your tracking zone.
+  enable_map_entities:
+    name: Multi-Ship Tracking
+    description: Creates an individual sensor for every tracked ship. Recommend the auto-entities plugin to show these on a map card.
   include_class_b:
     name: Include Class B Vessels
     description: Enable tracking for smaller vessels like pleasure craft, sailboats, and small passenger boats.
-  enable_map_entities:
-    name: Multi-Ship Tracking
-    description: Creates an individual sensor for every tracked ship. Recommend the auto-entities plugin to show these on a map. card. 
   vessel_watchlist:
     name: MMSI Filter
     description: Only track vessels with these MMSI numbers. Separate MMSIs with commas.
-  map_timeout_minutes:
-    name: Ship Entity Timeout (Minutes)
-    description: How long before a ship with no new tracking data is removed from the map.
   clear_map_on_startup:
     name: Clear Ship Entities on Startup
     description: Clears all ship entities from the map when add-on starts.
-  dev_mode:
-    name: Test Mode
-    description: Creates separate entities for testing.
+  map_timeout_minutes:
+    name: Ship Entity Timeout (Minutes)
+    description: How long before a ship with no new tracking data is removed from the map.
+  enable_api_monitoring:
+    name: API Monitoring
+    description: Enable API connection status monitoring entity.
+  api_monitoring_url:
+    name: API Monitoring URL
+    description: URL to check for API uptime and connectivity. It is unlikely you would need to change this.

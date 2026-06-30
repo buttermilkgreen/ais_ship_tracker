@@ -172,7 +172,8 @@ attributes:
 * **`MMSI Filter`**: Only shows ships with the MMSI(s) you specify. Separate each MMSI with a comma.
 * **`Ship Entity Timeout (Minutes)`**: How long before ships are cleared from the map after receiving no updates.
 * **`Clear Ship Entities on Startup`**: Clears all ship entities from the map when add-on starts.
-* **`Test Mode`**: The main sensors will stop updating and all sensors will be appended with `_dev`. For example `sensor.last_passing_ship_dev`, `sensor.ais_connection_status_dev`, `sensor.ais_ship_{mmsi}_dev`
+* **`API Monitoring`**: Enable API connection status monitoring entity.
+* **`API Monitoring URL`**: URL to check for API uptime and connectivity (defaults to `https://aisuptime.buttermilkgreen.fyi/api/v1/status?simple=true`).
 
 
 ---
@@ -186,6 +187,27 @@ Please keep in mind that AISStream is a **free, community-supported service**.
 * **Outages:** Sometimes the add-on appears to be connected in the logs, but no ships are being reported. You can sometimes check for ongoing API service issues here (it isnt a live status page and relies on users reporting issues): [AISStream Issues](https://github.com/aisstream/issues/issues).
 
 The add-on does show connectivity state via entity `sensor.ais_connection_status` and if in doubt, check the logs. 
+
+By default, the add-on supports monitoring an uptime API endpoint (e.g. to track the status of the AIS uptime service) and showing its reported status directly on the connection status entity. 
+
+* **API Uptime Monitoring**: This is enabled by default. The connection status entity will reflect the status fetched from the API endpoint. The underlying WebSocket connection status is kept available under the `websocket_status` attribute. If disabled, the entity will show connectivity status relative to your connection to the AISStream websocket. 
+* **Custom URL**: You can provide your own status endpoint URL (useful if hosting the uptime service yourself or for local testing/offline environments).
+* **Anonymous Telemetry**: When API Uptime Monitoring is enabled, the add-on sends anonymous telemetry payload (including  version, configuration flags, a persistent random UUID, and the number of monitored vessels on your watchlist) to the status endpoint. This helps understanding of user deployment size and configuration choices. No private information, API keys, or GPS coordinates are ever transmitted. You can disable telemetry entirely by turning off API Uptime Monitoring in the configuration.
+
+### Example telemetry payload:
+
+```json
+{
+  "uuid": "7a892b11-d144-489e-8c38-e6c1dfa0134f",
+  "version": "1.4.5",
+  "enable_map_entities": false,
+  "include_class_b": true,
+  "clear_map_on_startup": false,
+  "map_timeout_minutes": 30,
+  "enable_api_monitoring": true,
+  "watchlist_count": 0
+}
+```
 
 
 ---
