@@ -39,3 +39,5 @@ ENV/
 # Local/Development Configs
 manage_config.json
 manage.py
+ais_ship_tracker/tracker_uuid.txt
+

@@ -31,7 +31,4 @@ configuration:
     description: How long before a ship with no new tracking data is removed from the map.
   enable_api_monitoring:
     name: API Monitoring
-    description: Enable API connection status monitoring entity.
-  api_monitoring_url:
-    name: API Monitoring URL
-    description: URL to check for API uptime and connectivity. It is unlikely you would need to change this.
+    description: Enable entity to monitor API connection status.

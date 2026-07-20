@@ -1,5 +1,5 @@
 name: "AIS Ship Tracker"
-version: "1.4.5"
+version: "1.4.6"
 slug: "ais_ship_tracker"
 description: "Tracks passing ships via AISStream"
 url: "https://github.com/buttermilkgreen/ais_ship_tracker" 
@@ -24,7 +24,6 @@ options:
   clear_map_on_startup: false
   map_timeout_minutes: 30
   enable_api_monitoring: true
-  api_monitoring_url: "https://aisuptime.buttermilkgreen.fyi/api/v1/status?simple=true"
 schema:
   api_key: "password"
   longitude_west: "float"
@@ -37,4 +36,3 @@ schema:
   clear_map_on_startup: "bool?"
   map_timeout_minutes: "int?"
   enable_api_monitoring: "bool?"
-  api_monitoring_url: "str?"

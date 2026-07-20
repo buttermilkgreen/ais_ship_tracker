@@ -173,7 +173,7 @@ attributes:
 * **`Ship Entity Timeout (Minutes)`**: How long before ships are cleared from the map after receiving no updates.
 * **`Clear Ship Entities on Startup`**: Clears all ship entities from the map when add-on starts.
 * **`API Monitoring`**: Enable API connection status monitoring entity.
-* **`API Monitoring URL`**: URL to check for API uptime and connectivity (defaults to `https://aisuptime.buttermilkgreen.fyi/api/v1/status?simple=true`).
+* **`API Monitoring URL`**: URL to check for API uptime and connectivity. Defaults to `https://aisuptime.buttermilkgreen.fyi/api/v1/status?simple=true` (hidden in the configuration UI for normal installations).
 
 
 ---

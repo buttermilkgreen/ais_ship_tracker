@@ -1,15 +1,20 @@
 import json
 import time
 import websocket
+import random
 import os
+
+# Set default socket timeout for websocket-client handshake to prevent hanging connections
+websocket.setdefaulttimeout(15)
 import urllib.request
 import urllib.error
 import signal
 import sys
+import threading
 from datetime import datetime, timedelta
 
 print("🚀 Starting AIS Ship Tracker...", flush=True)
-VERSION = "1.4.5"
+VERSION = "1.4.6"
 
 def log(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -64,6 +69,12 @@ try:
     if API_MONITORING_INTERVAL < 10:
         API_MONITORING_INTERVAL = 10
 
+    WEBSOCKET_URL = "wss://stream.aisstream.io/v0/stream"
+    if DEV_MODE:
+        custom_ws_url = config.get('websocket_url', '')
+        if custom_ws_url:
+            WEBSOCKET_URL = custom_ws_url
+
     vessel_watchlist_raw = config.get('vessel_watchlist', '')
     if vessel_watchlist_raw:
         for item in vessel_watchlist_raw.split(','):
@@ -87,17 +98,26 @@ except Exception as e:
 import uuid
 # --- Load or Generate Persistent UUID ---
 UUID_FILE_PATH = "/data/tracker_uuid.txt"
+LOCAL_UUID_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tracker_uuid.txt")
 try:
-    if os.path.exists(UUID_FILE_PATH):
-        with open(UUID_FILE_PATH, "r") as f:
+    env_uuid = os.environ.get("TRACKER_UUID")
+    if env_uuid and env_uuid.strip():
+        TRACKER_UUID = env_uuid.strip()
+    elif os.path.exists(LOCAL_UUID_FILE_PATH):
+        with open(LOCAL_UUID_FILE_PATH, "r", encoding="utf-8") as f:
+            TRACKER_UUID = f.read().strip()
+        if not TRACKER_UUID:
+            raise ValueError("Local UUID file is empty")
+    elif os.path.exists(UUID_FILE_PATH):
+        with open(UUID_FILE_PATH, "r", encoding="utf-8") as f:
             TRACKER_UUID = f.read().strip()
     else:
         TRACKER_UUID = str(uuid.uuid4())
-        with open(UUID_FILE_PATH, "w") as f:
+        with open(UUID_FILE_PATH, "w", encoding="utf-8") as f:
             f.write(TRACKER_UUID)
     log(f"Tracker UUID initialized: {TRACKER_UUID[:8]}...")
 except Exception as e:
-    # Fallback to a temporary UUID if file system fails
+    # Fallback to a temporary UUID if file system fails or if local file was empty
     TRACKER_UUID = str(uuid.uuid4())
     log(f"⚠️ Failed to manage persistent UUID file (using ephemeral ID): {e}")
 
@@ -115,8 +135,9 @@ current_conn_status = "Disconnected"
 shutdown_in_progress = False
 
 # Backoff variables to prevent AISStream API concurrency lockouts
-RECONNECT_DELAY = 5
-MAX_RECONNECT_DELAY = 120
+RECONNECT_DELAY = 10
+MAX_RECONNECT_DELAY = 125
+reconnect_attempts = 0
 
 # Map of AIS Navigational Status integers to human-readable strings
 NAV_STATUS_MAP = {
@@ -460,14 +481,17 @@ def update_conn_status(status, new_error=None):
         "attributes": attributes
     }
     
-    try:
-        data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(api_url, data=data, headers=headers, method='POST')
-        # 5-second timeout requirement to ensure loop doesn't hang
-        with urllib.request.urlopen(req, timeout=5) as response:
-            pass
-    except Exception as e:
-        log(f"Failed to update connection status entity: {e}")
+    def send_status_update():
+        try:
+            data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(api_url, data=data, headers=headers, method='POST')
+            # 5-second timeout requirement to ensure loop doesn't hang
+            with urllib.request.urlopen(req, timeout=5) as response:
+                pass
+        except Exception as e:
+            log(f"Failed to update connection status entity: {e}")
+
+    threading.Thread(target=send_status_update, daemon=True).start()
 
 # Periodic background thread for checking the external API
 def api_monitor_worker():
@@ -559,7 +583,9 @@ def api_monitor_worker():
                         # Fallback if parsing fails - don't mark stale
                         pass
                         
-            if stale:
+            if api_state.lower() == "down":
+                new_state = "AISStream Service Down"
+            elif stale:
                 new_state = "No Vessel Data"
             else:
                 new_state = api_state
@@ -742,7 +768,7 @@ def on_close(ws, close_status_code, close_msg):
     
     # Add a helpful hint if the server drops us instantly without a word (usually an API key issue)
     if close_status_code is None and close_msg is None:
-        error_reason = "Closed by server silently (Code: None). Check your API Key!"
+        error_reason = "Closed by server silently (Code: None). Check your API Key or go to https://aisuptime.buttermilkgreen.fyi/ for service status."
     else:
         safe_msg = close_msg if close_msg is not None else "No message provided"
         error_reason = f"Closed by server. Code: {close_status_code} - Msg: {safe_msg}"
@@ -759,6 +785,8 @@ def on_pong(ws, message):
         last_purge_time = now
 
 def on_open(ws):
+    global reconnect_attempts
+    reconnect_attempts = 0
     log("🟢 Connected! Monitoring the water...")
     update_conn_status("Connected")
     
@@ -798,12 +826,15 @@ def start_tracker():
         log("ℹ️ Multi-Ship Map Entities: DISABLED (only the 'last passing ship' and connection status entities will be updated).")
 
     env_str = "DEV" if DEV_MODE else "PROD"
-    log(f"[{env_str}] [{VERSION}] Connecting to AISStream...")
+    if DEV_MODE and WEBSOCKET_URL != "wss://stream.aisstream.io/v0/stream":
+        log(f"[{env_str}] [{VERSION}] Connecting to custom websocket destination: {WEBSOCKET_URL}...")
+    else:
+        log(f"[{env_str}] [{VERSION}] Connecting to AISStream...")
         
     update_conn_status("Connecting")
     
     ws = websocket.WebSocketApp(
-        "wss://stream.aisstream.io/v0/stream",
+        WEBSOCKET_URL,
         on_open=on_open,
         on_message=on_message,
         on_error=on_error,
@@ -831,8 +862,20 @@ if __name__ == "__main__":
         while True:
             start_tracker()
             update_conn_status("Reconnecting")
-            log("Reconnecting in 10 seconds...")
-            time.sleep(10)
+            
+            reconnect_attempts += 1
+            # Cap the exponent term at 4 since 2**4 = 16 (160s) already exceeds MAX_RECONNECT_DELAY (125s)
+            exponent = min(reconnect_attempts - 1, 4)
+            calculated_delay = RECONNECT_DELAY * (2 ** max(0, exponent))
+            capped_delay = min(calculated_delay, MAX_RECONNECT_DELAY)
+            # Apply randomized jitter
+            jitter = random.uniform(0.85, 1.15)
+            jittered_delay = capped_delay * jitter
+            # Ensure the final delay is at least RECONNECT_DELAY seconds
+            final_delay = max(RECONNECT_DELAY, jittered_delay)
+            
+            log(f"Reconnecting in {int(final_delay)} seconds (Attempt {reconnect_attempts})...")
+            time.sleep(final_delay)
     except KeyboardInterrupt:
         log("🛑 Tracker stopped by user.")
         update_conn_status("Disconnected")
