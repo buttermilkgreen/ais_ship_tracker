@@ -39,13 +39,11 @@ To install this add-on, you need to add this repository to your Home Assistant a
 
 ---
 
-## 🔑 Getting Your API Key
+## 🔑 Getting Your API Key or Token
 
-This add-on relies on [AISStream.io](https://aisstream.io), a free, community-driven network of radio receivers. To use it, you need a personal API key.
-
-1. Go to [aisstream.io](https://aisstream.io) and sign in.
-2. In your account, you can request an **API Key** (a long string of letters and numbers).
-3. Copy this key into the add-on's Configuration tab in Home Assistant.
+* **AISStream.io**: Go to [aisstream.io](https://aisstream.io), sign in, generate an API Key, and enter it in the add-on configuration.
+* **Open Waters**: Generate a free token in one click (no account needed) at [openwaters.io/ais/token/](https://openwaters.io/ais/token/) and enter it in the API Key box.
+* **AIS-catcher**: No API key or cloud account required!
 
 ---
 
@@ -182,20 +180,58 @@ attributes:
 ---
 ## 🛠️ Config Specifics
 
-* **`Data Source`**: Use the [AISStream.io](https://aisstream.io) websocket or AIS-catcher if you have a local antenna.
-* **`API Key`**: The free API key you need to generate from [AISStream.io](https://aisstream.io).
+* **`Data Source`**: Choose between `AISStream.io` (free online websocket, default), `Open Waters` (open-source online websocket), or `AIS-catcher` (local antenna via MQTT).
+* **`API Key`**: The free API key from [AISStream.io](https://aisstream.io) or token from [openwaters.io](https://openwaters.io/ais/token/). Not needed when using AIS-catcher.
 * **`Bounding Box - Bottom-Left Longitude (West)`**: Left edge of the bounding box and the first number from bboxfinder co-ordinates.
 * **`Bounding Box - Bottom-Left Latitude (South)`**: Bottom edge of the bounding box and the second number from bboxfinder co-ordinates.
 * **`Bounding Box - Top-Right Longitude (East)`**: Right edge of the bounding box and the third number from bboxfinder co-ordinates.
 * **`Bounding Box - Top-Right Latitude (North)`**: Top edge of the bounding box and the fourth number from bboxfinder co-ordinates.
-* **`Include Class B Vessels`**: Class B vessels (typically leisure craft) will be shown
-* **`Multi-Ship Tracking`**: Creates new entities for all ships that enter the bounding box in the format `sensor.ais_ship_{mmsi}`
+* **`Enable Bounding Box for AIS-catcher`**: Only relevant for AIS-catcher users. When using AIS-catcher, all ships heard by your antenna are tracked. Turn this on if you want to restrict local tracking to your bounding box co-ordinates.
+* **`Include Class B Vessels`**: Class B vessels (typically leisure craft) will be shown.
+* **`Multi-Ship Tracking`**: Creates new entities for all ships that enter the bounding box in the format `sensor.ais_ship_{mmsi}`.
 * **`MMSI Filter`**: Only shows ships with the MMSI(s) you specify. Separate each MMSI with a comma.
 * **`Ship Entity Timeout (Minutes)`**: How long before ships are cleared from the map after receiving no updates.
 * **`Clear Ship Entities on Startup`**: Clears all ship entities from the map when add-on starts.
-* **`API Monitoring`**: Enable API connection status monitoring entity.
+* **`API Monitoring`**: Enable entity to monitor API connection and service health status.
 * **`API Monitoring URL`**: URL to check for API uptime and connectivity. Defaults to `https://aisuptime.buttermilkgreen.fyi/api/v1/status?simple=true` (hidden in the configuration UI for normal installations).
 
+---
+
+## 📡 Using AIS-catcher
+
+If you have an SDR dongle (such as an RTL-SDR) and an antenna, you can feed ships directly from **[AIS-catcher](https://github.com/jvde-github/AIS-catcher)** into this add-on instead of relying on AISStream.
+
+### What needs to be in place:
+1. **AIS-catcher running on your network** 
+2. **Mosquitto broker:** You should have the official Mosquitto broker add-on installed and running in Home Assistant. The add-on automatically discovers your broker connection details.
+3. **AIS-catcher outputting to MQTT:** Run AIS-catcher with MQTT output enabled using the `JSON_FULL` format. For example:
+   ```bash
+   /usr/local/bin/AIS-catcher -Q mqtt://<user>:<password>@<ha_ip>:1883 msgformat JSON_FULL topic ais/data
+   ```
+   *(The add-on automatically listens to `ais/#` and `aiscatcher/#`, so common topics like `ais/data` or `aiscatcher/json` work straight away).*
+
+### Relevant Config:
+* **Switch the Data Source:** Set **Data Source** to `AIS-catcher` in the add-on configuration and save.
+* **API Key is ignored:** You can leave the API key blank (or leave your existing key as it is). It is not used in this mode.
+* **Bounding box is disabled by default:** Because an antenna is naturally limited by line of sight to your local horizon, you do not need to draw a box. The add-on will track all vessels your aerial picks up. Existing co-ordinates left over from AISStream mode will not block any ships.
+* **Optional bounding box filtering:** If you live on a hill and your aerial can see 30 miles out, but you only want alerts for ships entering a specific port or estuary, turn on **Enable Bounding Box for AIS-catcher**. The add-on will then filter your local radio packets using your bounding box co-ordinates.
+* **Everything else stays the same:** Multi-ship map cards, MMSI filtering, Class B inclusion/exclusion, entity timeouts, and startup clearing all work identically to the cloud mode.
+
+### Why do I see "Unknown Ship Name"?
+When listening to live radio transmissions with your own aerial, ships will often initially appear as `Unknown Ship Name`. This is completely normal:
+
+* Ships broadcast their **location and speed** frequently (every few seconds), but these messages do not include the vessel's name.
+* Ships only broadcast their **name and static data** once every **6 minutes**.
+* When a vessel first comes within range of your aerial, the add-on plots its position straight away, but it has to wait for that 6-minute radio packet to arrive over the air before it can update with the real name.
+
+**Tips:**
+* **Automations:** If you have automations (like spoken announcements or notifications), add a condition so they only fire once the name is known:
+  ```yaml
+  condition:
+    - condition: template
+      value_template: "{{ trigger.to_state.state not in ['Unknown Ship Name', 'unavailable', 'unknown'] }}"
+  ```
+* **Use a Bounding Box:** If your aerial reaches several miles out, drawing a smaller bounding box over the water within your aerial's range and turning on **Enable Bounding Box for AIS-catcher** gives your antenna time to pick up the ship's name before it sails into your viewing zone.
 
 ---
 
@@ -205,14 +241,13 @@ Please keep in mind that AISStream is a **free, community-supported service**.
 
 * **Dropped Connections:** The server may occasionally drop the connection to your add-on if it gets too busy. The add-on will try to reconnect without you having to do anything. Look in the add-on logs if you suspect constant connectivity issues.
 * **Ghost Ships:** You may sometimes see `Unknown Ship Name`. This usually happens because a smaller boat (like a yacht or fishing vessel) has not programmed its name into its radio transponder, or because the API simply hasn't caught the broadcasted name yet. This is normal behaviour.
-* **Outages:** Sometimes the add-on appears to be connected in the logs, but no ships are being reported. You can sometimes check for ongoing API service issues here (it isnt a live status page and relies on users reporting issues): [AISStream Issues](https://github.com/aisstream/issues/issues).
+* **Outages:** Sometimes the add-on appears to be connected in the logs, but no ships are being reported. You can check for ongoing API service issues [here](https://aisuptime.buttermilkgreen.fyi) using the unofficial status page or hope that there is a log here: [AISStream Issues](https://github.com/aisstream/issues/issues).
 
 The add-on does show connectivity state via entity `sensor.ais_connection_status` and if in doubt, check the logs. 
 
 By default, the add-on supports monitoring an uptime API endpoint (e.g. to track the status of the AIS uptime service) and showing its reported status directly on the connection status entity. 
 
-* **API Uptime Monitoring**: This is enabled by default. The connection status entity will reflect the status fetched from the API endpoint. The underlying WebSocket connection status is kept available under the `websocket_status` attribute. If disabled, the entity will show connectivity status relative to your connection to the AISStream websocket. 
-* **Custom URL**: You can provide your own status endpoint URL (useful if hosting the uptime service yourself or for local testing/offline environments).
+* **API Uptime Monitoring**: This is enabled by default. The connection status entity will reflect the status fetched from [the unofficial uptime monitor api](https://aisuptime.buttermilkgreen.fyi). If disabled, the entity will show connectivity status relative to your connection to the AISStream websocket. 
 * **Anonymous Telemetry**: When API Uptime Monitoring is enabled, the add-on sends anonymous telemetry payload (including  version, configuration flags, a persistent random UUID, and the number of monitored vessels on your watchlist) to the status endpoint. This helps understanding of user deployment size and configuration choices. No private information, API keys, or GPS coordinates are ever transmitted. You can disable telemetry entirely by turning off API Uptime Monitoring in the configuration.
 
 ### Example telemetry payload:
@@ -220,13 +255,15 @@ By default, the add-on supports monitoring an uptime API endpoint (e.g. to track
 ```json
 {
   "uuid": "7a892b11-d144-489e-8c38-e6c1dfa0134f",
-  "version": "1.4.5",
+  "version": "1.5.0",
+  "data_source": "AISStream.io",
+  "filter_local_by_bounding_box": false,
   "enable_map_entities": false,
   "include_class_b": true,
   "clear_map_on_startup": false,
   "map_timeout_minutes": 30,
   "enable_api_monitoring": true,
-  "watchlist_count": 0
+  "watchlist_count": 2
 }
 ```
 

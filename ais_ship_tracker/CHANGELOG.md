@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0
+* [Feature] Support for Open Waters (openwaters.io) as a source via (`wss://ais.openwaters.io/v0/stream`). Supports free personal tokens without registration and API monitoring entity reflects their health endpoint.
+* [Feature] Support for AIS-catcher via MQTT. Stream directly from your local antenna via Mosquitto, removing reliance on the AISStream websocket.
+  * When enabled, the bounding box is ignored unless you specifically toggle on "Enable Bounding Box for AIS-catcher". 
+  * All other functions are fully supported.
+  * See docs for setup etc. If this is a feature you like but need more configurability around MQTT, please raise a Github issue. 
+
 ## 1.4.6
 * [Fix] Enhanced reconnection logic after a couple of recent AISStream outages. The app should now gracefully reconnect when the service comes back up. 
 * [Fix] Fixed accuracy of outage status for sensor.ais_connection_status entity

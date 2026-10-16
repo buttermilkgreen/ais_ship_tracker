@@ -1,7 +1,7 @@
 name: "AIS Ship Tracker"
-version: "1.4.6"
+version: "1.5.0"
 slug: "ais_ship_tracker"
-description: "Tracks passing ships via AISStream"
+description: "Tracks passing ships via AISStream, Open Waters, or local AIS-catcher"
 url: "https://github.com/buttermilkgreen/ais_ship_tracker" 
 arch:
   - "aarch64"
@@ -12,12 +12,16 @@ boot: "auto"
 icon: "icon.png"
 init: false
 homeassistant_api: true
+services:
+  - "mqtt:want"
 options:
+  data_source: "AISStream.io"
   api_key: ""
   longitude_west: 1.20
   latitude_south: 50.90
   longitude_east: 1.80
   latitude_north: 51.20
+  filter_local_by_bounding_box: false
   enable_map_entities: false
   include_class_b: true
   vessel_watchlist: ""
@@ -25,11 +29,13 @@ options:
   map_timeout_minutes: 30
   enable_api_monitoring: true
 schema:
-  api_key: "password"
+  data_source: "list(AISStream.io|Open Waters|AIS-catcher)"
+  api_key: "password?"
   longitude_west: "float"
   latitude_south: "float"
   longitude_east: "float"
   latitude_north: "float"
+  filter_local_by_bounding_box: "bool?"
   enable_map_entities: "bool?"
   include_class_b: "bool?"
   vessel_watchlist: "str?"

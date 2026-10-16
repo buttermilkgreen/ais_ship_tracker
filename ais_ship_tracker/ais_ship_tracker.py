@@ -14,7 +14,7 @@ import threading
 from datetime import datetime, timedelta
 
 print("🚀 Starting AIS Ship Tracker...", flush=True)
-VERSION = "1.4.6"
+VERSION = "1.5.0"
 
 def log(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -28,14 +28,31 @@ watchlist_mmsis = []
 
 try:
     # --- Load Configuration from Home Assistant UI ---
-    with open('/data/options.json') as f:
-        config = json.load(f)
+    if os.path.exists('/data/options.json'):
+        with open('/data/options.json') as f:
+            config = json.load(f)
+    elif os.path.exists('options.json'):
+        with open('options.json') as f:
+            config = json.load(f)
+    else:
+        config = {}
 
     def get_safe_int(key, default):
         val = config.get(key)
         if val is None or val == "": return default
         try: return int(val)
         except: return default
+
+    DATA_SOURCE = config.get('data_source', 'AISStream.io')
+    IS_AIS_CATCHER = "catcher" in str(DATA_SOURCE).lower()
+    IS_OPEN_WATERS = "open" in str(DATA_SOURCE).lower() and "water" in str(DATA_SOURCE).lower()
+    custom_topic = config.get('mqtt_topic')
+    if custom_topic and str(custom_topic).strip():
+        MQTT_TOPICS = [str(custom_topic).strip()]
+    else:
+        MQTT_TOPICS = ["ais/#", "aiscatcher/#"]
+    filter_bbox_val = config.get('filter_local_by_bounding_box', False)
+    FILTER_LOCAL_BY_BOUNDING_BOX = str(filter_bbox_val).lower() in ['true', '1', 't', 'y', 'yes'] if filter_bbox_val is not None else False
 
     AIS_API_KEY = config.get('api_key', '')
     lat_south = float(config.get('latitude_south', 50.90))
@@ -69,7 +86,12 @@ try:
     if API_MONITORING_INTERVAL < 10:
         API_MONITORING_INTERVAL = 10
 
-    WEBSOCKET_URL = "wss://stream.aisstream.io/v0/stream"
+    OPENWATERS_HEALTH_URL = "https://ais.openwaters.io/health"
+    if IS_OPEN_WATERS:
+        WEBSOCKET_URL = "wss://ais.openwaters.io/v0/stream"
+    else:
+        WEBSOCKET_URL = "wss://stream.aisstream.io/v0/stream"
+
     if DEV_MODE:
         custom_ws_url = config.get('websocket_url', '')
         if custom_ws_url:
@@ -115,7 +137,7 @@ try:
         TRACKER_UUID = str(uuid.uuid4())
         with open(UUID_FILE_PATH, "w", encoding="utf-8") as f:
             f.write(TRACKER_UUID)
-    log(f"Tracker UUID initialized: {TRACKER_UUID[:8]}...")
+    log(f"UUID: {TRACKER_UUID[:8]}...")
 except Exception as e:
     # Fallback to a temporary UUID if file system fails or if local file was empty
     TRACKER_UUID = str(uuid.uuid4())
@@ -133,6 +155,14 @@ last_purge_time = datetime.now()
 last_known_error = ""
 current_conn_status = "Disconnected"
 shutdown_in_progress = False
+
+# AIS-catcher Local MQTT State Tracking
+local_packets_received = 0
+last_packet_time = None
+local_rejected_count = 0
+local_accepted_count = 0
+recent_rejected_coords = []
+mqtt_client_instance = None
 
 # Backoff variables to prevent AISStream API concurrency lockouts
 RECONNECT_DELAY = 10
@@ -221,7 +251,11 @@ def sync_state_on_startup():
             if entity_id.startswith("sensor.ais_ship_") and "last_passing_ship" not in entity_id:
                 attrs = state.get("attributes", {})
                 vessel_class = attrs.get("vessel_class", "Unknown")
-                mmsi = str(attrs.get("mmsi")) if attrs.get("mmsi") else entity_id.replace("sensor.ais_ship_", "").replace("_dev", "")
+                raw_mmsi = str(attrs.get("mmsi")) if attrs.get("mmsi") else entity_id.replace("sensor.ais_ship_", "").replace("_dev", "")
+                try:
+                    mmsi = int(raw_mmsi)
+                except (ValueError, TypeError):
+                    mmsi = raw_mmsi
                 spotted_time = attrs.get("spotted_time")
                 
                 if not spotted_time:
@@ -233,6 +267,7 @@ def sync_state_on_startup():
                     continue
                     
                 age_seconds = (datetime.now() - parsed_time).total_seconds()
+                is_in_watchlist = not watchlist_mmsis or (str(mmsi) in watchlist_mmsis) or (f"{mmsi:09d}" in watchlist_mmsis if isinstance(mmsi, int) else False)
                 
                 if (
                     not ENABLE_MAP_ENTITIES or 
@@ -240,7 +275,7 @@ def sync_state_on_startup():
                     age_seconds > (MAP_TIMEOUT_MINUTES * 60) or
                     (not INCLUDE_CLASS_B and vessel_class == "Class B") or
                     (is_dev_entity != DEV_MODE) or
-                    (watchlist_mmsis and mmsi not in watchlist_mmsis)
+                    not is_in_watchlist
                 ):
                     purge_url = f"http://supervisor/core/api/states/{entity_id}"
                     payload = {"state": "unavailable", "attributes": {}}
@@ -316,7 +351,8 @@ def update_map_entity(ship_data, remove=False):
             }
         }
         
-        static_info = static_ship_data.get(ship_data.get("mmsi"))
+        mmsi_raw = ship_data.get("mmsi")
+        static_info = static_ship_data.get(mmsi_raw) or static_ship_data.get(str(mmsi_raw))
         if static_info:
             if "destination" in static_info and static_info["destination"]:
                 payload["attributes"]["destination"] = static_info["destination"]
@@ -346,15 +382,13 @@ def purge_old_ships():
    # Removes ships from memory and the map that haven't been seen recently 
     now = datetime.now()
     expired_mmsi = [
-        mmsi for mmsi, last_seen in seen_ships.items() 
+        mmsi for mmsi, last_seen in list(seen_ships.items())
         if now - last_seen > timedelta(minutes=MAP_TIMEOUT_MINUTES)
     ]
     for mmsi in expired_mmsi:
-        del seen_ships[mmsi]
-        if mmsi in last_map_update:
-            del last_map_update[mmsi]
-        if mmsi in static_ship_data:
-            del static_ship_data[mmsi]
+        seen_ships.pop(mmsi, None)
+        last_map_update.pop(mmsi, None)
+        static_ship_data.pop(mmsi, None)
             
         # Strip entity from the map
         update_map_entity({"mmsi": mmsi}, remove=True)
@@ -436,7 +470,28 @@ def update_conn_status(status, new_error=None):
         else:
             sanitised_error = str(last_known_error)
 
-    if ENABLE_API_MONITORING:
+    if IS_AIS_CATCHER:
+        state_value = f"{status} (MQTT)" if status in ["Connected", "Connecting", "Reconnecting", "Disconnected"] else status
+        if status == "Connected":
+            icon = "mdi:radio-tower"
+        elif status in ["Connecting", "Reconnecting"]:
+            icon = "mdi:radio-tower"
+        else:
+            icon = "mdi:radio-off"
+
+        attributes = {
+            "friendly_name": "AIS Ship Tracker Connection Status (Dev)" if DEV_MODE else "AIS Ship Tracker Connection Status",
+            "data_source": "aiscatcher_mqtt",
+            "mqtt_topic": ", ".join(MQTT_TOPICS),
+            "packets_received": local_packets_received,
+            "vessels_tracked": len(seen_ships),
+            "filter_by_bounding_box": FILTER_LOCAL_BY_BOUNDING_BOX,
+            "last_packet_received": last_packet_time.strftime("%Y-%m-%d %H:%M:%S") if last_packet_time else "Never",
+            "last_update_attempt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "error_message": sanitised_error,
+            "icon": icon
+        }
+    elif ENABLE_API_MONITORING:
         # Set state to what was fetched from the API
         state_value = api_monitor_state["state"]
         
@@ -449,12 +504,15 @@ def update_conn_status(status, new_error=None):
         else:
             icon = "mdi:cloud-off-outline"
             
+        ws_source_slug = "openwaters_websocket" if IS_OPEN_WATERS else "aisstream_websocket"
+        monitored_url = OPENWATERS_HEALTH_URL if IS_OPEN_WATERS else API_MONITORING_URL
         attributes = {
             "friendly_name": "AIS Ship Tracker Connection Status (Dev)" if DEV_MODE else "AIS Ship Tracker Connection Status",
+            "data_source": ws_source_slug,
             "last_update_attempt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "websocket_status": status,
             "websocket_error": sanitised_error,
-            "monitored_url": API_MONITORING_URL,
+            "monitored_url": monitored_url,
             "lastChecked": api_monitor_state["lastChecked"],
             "lastMessageReceived": api_monitor_state["lastMessageReceived"],
             "api_error": api_monitor_state["error"],
@@ -469,8 +527,10 @@ def update_conn_status(status, new_error=None):
         else:
             icon = "mdi:cloud-off-outline"
             
+        ws_source_slug = "openwaters_websocket" if IS_OPEN_WATERS else "aisstream_websocket"
         attributes = {
             "friendly_name": "AIS Ship Tracker Connection Status (Dev)" if DEV_MODE else "AIS Ship Tracker Connection Status",
+            "data_source": ws_source_slug,
             "last_update_attempt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "error_message": sanitised_error,
             "icon": icon
@@ -507,6 +567,8 @@ def api_monitor_worker():
             telemetry_payload = {
                 "uuid": TRACKER_UUID,
                 "version": VERSION,
+                "data_source": DATA_SOURCE,
+                "filter_local_by_bounding_box": FILTER_LOCAL_BY_BOUNDING_BOX,
                 "enable_map_entities": ENABLE_MAP_ENTITIES,
                 "include_class_b": INCLUDE_CLASS_B,
                 "clear_map_on_startup": CLEAR_MAP_ON_STARTUP,
@@ -515,6 +577,55 @@ def api_monitor_worker():
                 "watchlist_count": len(watchlist_mmsis)
             }
             
+            if IS_OPEN_WATERS:
+                # 1. Send anonymous telemetry to the buttermilkgreen endpoint
+                try:
+                    data = json.dumps(telemetry_payload).encode('utf-8')
+                    req = urllib.request.Request(
+                        API_MONITORING_URL, 
+                        data=data,
+                        headers={
+                            "User-Agent": "AIS-Ship-Tracker-Addon",
+                            "Content-Type": "application/json"
+                        },
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        pass
+                except Exception:
+                    # Telemetry delivery failure should not break Open Waters health check
+                    pass
+
+                # 2. Check Open Waters health status
+                try:
+                    ow_req = urllib.request.Request(
+                        OPENWATERS_HEALTH_URL,
+                        headers={"User-Agent": "AIS-Ship-Tracker-Addon"}
+                    )
+                    with urllib.request.urlopen(ow_req, timeout=10) as ow_resp:
+                        ow_body = ow_resp.read().decode('utf-8', errors='ignore').strip()
+                        if ow_resp.status == 200 and "ok" in ow_body.lower():
+                            ow_state = "Up"
+                            ow_err = None
+                        else:
+                            ow_state = "Degraded"
+                            ow_err = f"Unexpected health status: {ow_body[:50]}"
+                except Exception as ow_e:
+                    ow_state = "Down"
+                    ow_err = str(ow_e)
+
+                if ow_state != api_monitor_state["state"]:
+                    log(f"Open Waters API status changed from {api_monitor_state['state']} to {ow_state}")
+
+                api_monitor_state["state"] = ow_state
+                api_monitor_state["lastChecked"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+                api_monitor_state["lastMessageReceived"] = None
+                api_monitor_state["error"] = ow_err
+                update_conn_status(current_conn_status)
+
+                time.sleep(API_MONITORING_INTERVAL)
+                continue
+
             try:
                 # 1. Attempt POST with Telemetry
                 data = json.dumps(telemetry_payload).encode('utf-8')
@@ -533,7 +644,8 @@ def api_monitor_worker():
                 # Helper to update HA sensor state on failure
                 api_monitor_state["state"] = "Status Unavailable"
                 api_monitor_state["error"] = str(http_err)
-                update_conn_status(current_conn_status)
+                if not IS_AIS_CATCHER:
+                    update_conn_status(current_conn_status)
 
                 # Fallback: If 405 Method Not Allowed or 400 Bad Request, retry as standard GET
                 if http_err.code in [400, 405]:
@@ -545,7 +657,8 @@ def api_monitor_worker():
                     except Exception as fallback_err:
                         log(f"Failed fallback GET check: {fallback_err}")
                         api_monitor_state["error"] = str(fallback_err)
-                        update_conn_status(current_conn_status)
+                        if not IS_AIS_CATCHER:
+                            update_conn_status(current_conn_status)
                         time.sleep(API_MONITORING_INTERVAL)
                         continue
                 else:
@@ -556,7 +669,8 @@ def api_monitor_worker():
                 log(f"API monitoring connection error: {e}")
                 api_monitor_state["state"] = "Status Unavailable"
                 api_monitor_state["error"] = str(e)
-                update_conn_status(current_conn_status)
+                if not IS_AIS_CATCHER:
+                    update_conn_status(current_conn_status)
                 time.sleep(API_MONITORING_INTERVAL)
                 continue
 
@@ -598,8 +712,9 @@ def api_monitor_worker():
             api_monitor_state["lastMessageReceived"] = last_msg_str
             api_monitor_state["error"] = None
             
-            # Trigger Home Assistant entity update with the latest statuses
-            update_conn_status(current_conn_status)
+            # Trigger Home Assistant entity update with the latest statuses (AISStream only)
+            if not IS_AIS_CATCHER:
+                update_conn_status(current_conn_status)
             
             time.sleep(API_MONITORING_INTERVAL)
 
@@ -610,16 +725,240 @@ def api_monitor_worker():
 if ENABLE_API_MONITORING:
     api_monitor_worker()
 
+def get_mqtt_credentials():
+    # 1. Try Supervisor Services API
+    if SUPERVISOR_TOKEN:
+        try:
+            req = urllib.request.Request(
+                "http://supervisor/services/mqtt",
+                headers={"Authorization": f"Bearer {SUPERVISOR_TOKEN}"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                if data.get("result") == "ok" and "data" in data:
+                    svc = data["data"]
+                    log(f"🔑 Discovered Mosquitto broker from Supervisor service ({svc.get('host')}:{svc.get('port')})")
+                    return {
+                        "host": svc.get("host", "core-mosquitto"),
+                        "port": int(svc.get("port", 1883)),
+                        "username": svc.get("username"),
+                        "password": svc.get("password")
+                    }
+        except Exception as e:
+            log(f"ℹ️ Supervisor MQTT service discovery query failed ({e}). Checking environment/defaults...")
+
+    # 2. Check environment variables
+    env_host = os.environ.get("MQTT_HOST") or os.environ.get("MOSQUITTO_HOST")
+    if env_host:
+        return {
+            "host": env_host,
+            "port": int(os.environ.get("MQTT_PORT", 1883)),
+            "username": os.environ.get("MQTT_USER") or os.environ.get("MQTT_USERNAME"),
+            "password": os.environ.get("MQTT_PASSWORD")
+        }
+
+    # 3. Default fallback to standard Home Assistant Mosquitto container hostname
+    return {
+        "host": "core-mosquitto",
+        "port": 1883,
+        "username": None,
+        "password": None
+    }
+
+def handle_ship_position(ship_data):
+    mmsi = ship_data.get("mmsi")
+    name = ship_data.get("name", "Unknown Ship")
+    vessel_class = ship_data.get("vessel_class", "Unknown")
+
+    # 1. Logic for 'Last Passing Ship' (Triggers only on newly spotted ships)
+    if mmsi not in seen_ships and str(mmsi) not in seen_ships:
+        log(f"🚢 NEW SHIP: {name} ({vessel_class} | MMSI: {mmsi})")
+        log(f"   ↳ Telemetry -> Lat: {ship_data['latitude']}, Lon: {ship_data['longitude']}, "
+            f"Speed: {ship_data['sog']}kn, Course: {ship_data['cog']}°, "
+            f"Heading: {ship_data['heading']}°, Status: {ship_data['nav_status_string']}")
+        update_ha_entity(ship_data)
+    
+    # Update last seen timestamp for memory persistence
+    now = datetime.now()
+    seen_ships[mmsi] = now
+    
+    # 2. Logic for Dynamic Map Entities (Updates live as ship moves, with anti-spam rate limiting)
+    last_updated = last_map_update.get(mmsi) or last_map_update.get(str(mmsi))
+    if last_updated is None or (now - last_updated).total_seconds() >= 60:
+        update_map_entity(ship_data)
+        last_map_update[mmsi] = now
+        
+        # If it's not a brand new ship, log the 60-second update so we can verify it's working
+        if last_updated is not None:
+            log(f"🗺️ Ship Updated: {name} ({vessel_class} | MMSI: {mmsi}) | Lat: {ship_data.get('latitude')}, Lon: {ship_data.get('longitude')}")
+
+def handle_aiscatcher_message(payload_str):
+    global last_known_error, local_rejected_count, local_accepted_count
+
+    try:
+        data = json.loads(payload_str)
+    except Exception as e:
+        log(f"Failed to decode JSON from MQTT: {e}")
+        return
+
+    items = data if isinstance(data, list) else [data]
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        raw_mmsi = item.get("mmsi") or item.get("MMSI")
+        if raw_mmsi is None:
+            continue
+        try:
+            mmsi = int(raw_mmsi)
+        except (ValueError, TypeError):
+            continue
+
+        str_mmsi = f"{mmsi:09d}"
+        if watchlist_mmsis and str_mmsi not in watchlist_mmsis and str(mmsi) not in watchlist_mmsis:
+            continue
+
+        # Class B detection
+        raw_class = str(item.get("class", "")).upper()
+        msg_type = item.get("type")
+        is_class_b = (raw_class == "B") or (msg_type in [18, 19, 24])
+        vessel_class = "Class B" if is_class_b else "Class A"
+        if is_class_b and not INCLUDE_CLASS_B:
+            continue
+
+        # Static Data Extraction
+        ship_name = item.get("shipname") or item.get("name") or item.get("ShipName")
+        dest = item.get("destination")
+        call_sign = item.get("callsign") or item.get("CallSign")
+        raw_type = item.get("shiptype") or item.get("type_text")
+        if isinstance(raw_type, dict):
+            raw_type = raw_type.get("text") or raw_type.get("name") or raw_type.get("code")
+        if raw_type is None and msg_type in [5, 24]:
+            raw_type = item.get("type")
+        
+        vessel_type = None
+        if isinstance(raw_type, int):
+            vessel_type = get_vessel_type_string(raw_type)
+        elif isinstance(raw_type, str) and raw_type.strip():
+            vessel_type = raw_type.strip()
+
+        raw_eta = item.get("eta")
+        eta = None
+        if isinstance(raw_eta, dict):
+            month = raw_eta.get("Month", 0)
+            day = raw_eta.get("Day", 0)
+            hour = raw_eta.get("Hour", 0)
+            minute = raw_eta.get("Minute", 0)
+            if month > 0 and day > 0:
+                eta = f"{day:02d}/{month:02d} {hour:02d}:{minute:02d} UTC"
+        elif isinstance(raw_eta, str) and raw_eta.strip():
+            eta = raw_eta.strip()
+
+        raw_imo = item.get("imo") or item.get("ImoNumber")
+        imo_number = str(raw_imo) if raw_imo and str(raw_imo).isdigit() and int(raw_imo) > 0 else None
+
+        ship_length = item.get("length")
+        if ship_length is None and "to_bow" in item and "to_stern" in item:
+            try:
+                ship_length = (item.get("to_bow") or 0) + (item.get("to_stern") or 0)
+            except:
+                pass
+
+        current_static = static_ship_data.setdefault(mmsi, {})
+        if ship_name and str(ship_name).strip():
+            current_static["name"] = str(ship_name).strip()
+        if dest and str(dest).strip():
+            current_static["destination"] = str(dest).strip()
+        if eta:
+            current_static["eta"] = eta
+        if call_sign and str(call_sign).strip():
+            current_static["call_sign"] = str(call_sign).strip()
+        if vessel_type:
+            current_static["vessel_type"] = vessel_type
+        if imo_number:
+            current_static["imo_number"] = imo_number
+        if ship_length:
+            current_static["ship_length"] = ship_length
+
+        # Position Report Processing
+        lat = item.get("lat") if item.get("lat") is not None else item.get("latitude")
+        lon = item.get("lon") if item.get("lon") is not None else item.get("longitude")
+        if lat is None or lon is None:
+            # Static data only message - we recorded static data, done
+            continue
+
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (ValueError, TypeError):
+            continue
+
+        # Bounding box logic
+        if not FILTER_LOCAL_BY_BOUNDING_BOX:
+            in_bbox = True
+        else:
+            in_bbox = (min(lat_south, lat_north) <= lat <= max(lat_south, lat_north)) and \
+                      (min(lon_west, lon_east) <= lon <= max(lon_west, lon_east))
+
+        if not in_bbox:
+            local_rejected_count += 1
+            recent_rejected_coords.append((lat, lon))
+            if len(recent_rejected_coords) > 50:
+                recent_rejected_coords.pop(0)
+            if local_rejected_count % 25 == 0 and local_accepted_count == 0:
+                avg_lat = sum(c[0] for c in recent_rejected_coords) / len(recent_rejected_coords)
+                avg_lon = sum(c[1] for c in recent_rejected_coords) / len(recent_rejected_coords)
+                lat_dir = "N" if avg_lat >= 0 else "S"
+                lon_dir = "E" if avg_lon >= 0 else "W"
+                log(f"⚠️ Warning: Received {local_rejected_count} local vessels near [~{abs(avg_lat):.2f}°{lat_dir}, ~{abs(avg_lon):.2f}°{lon_dir}], but all were rejected by your bounding box. Check your bounding box coordinates in settings or turn off 'Enable Bounding Box for AIS-catcher'.")
+            continue
+
+        local_accepted_count += 1
+
+        # Clear sticky error upon receiving valid data
+        if last_known_error != "":
+            last_known_error = ""
+            update_conn_status("Connected")
+
+        nav_status_int = item.get("status")
+        nav_status_string = item.get("status_text")
+        if not nav_status_string and isinstance(nav_status_int, int):
+            nav_status_string = NAV_STATUS_MAP.get(nav_status_int, "Not defined")
+        elif not nav_status_string:
+            nav_status_string = "Not defined"
+
+        icon = ICON_MAP.get(nav_status_int, "mdi:ferry") if isinstance(nav_status_int, int) else "mdi:ferry"
+        resolved_name = current_static.get("name") or "Unknown Ship Name"
+
+        sog = item.get("speed") if item.get("speed") is not None else item.get("sog")
+        cog = item.get("course") if item.get("course") is not None else item.get("cog")
+        heading = item.get("heading")
+
+        ship_data = {
+            "name": resolved_name,
+            "mmsi": mmsi,
+            "latitude": lat,
+            "longitude": lon,
+            "sog": sog,
+            "cog": cog,
+            "heading": heading,
+            "nav_status_string": nav_status_string,
+            "vessel_class": vessel_class,
+            "icon": icon
+        }
+        handle_ship_position(ship_data)
+
 
 def on_message(ws, message_json):
     global last_known_error
     try:
         message = json.loads(message_json)
         
-        # Intercept and handle AISStream API Logic Errors gracefully
-        if message.get("Type") == "Error":
-            extracted_message = message.get("Message", "Unknown Error")
-            log(f"⚠️ AISStream API Error: {extracted_message}")
+        # Intercept and handle AISStream / Open Waters API Logic Errors gracefully
+        if message.get("Type") == "Error" or message.get("type") == "error":
+            extracted_message = message.get("Message") or message.get("error") or "Unknown Error"
+            source_label = "Open Waters" if IS_OPEN_WATERS else "AISStream"
+            log(f"⚠️ {source_label} API Error: {extracted_message}")
             update_conn_status("Reconnecting", new_error=extracted_message)
             return
             
@@ -726,27 +1065,7 @@ def on_message(ws, message_json):
                 "icon": ICON_MAP.get(nav_status_int, "mdi:ferry")
             }
             
-            # 1. Logic for 'Last Passing Ship' (Triggers only on newly spotted ships)
-            if mmsi not in seen_ships:
-                log(f"🚢 NEW SHIP: {name} ({vessel_class} | MMSI: {mmsi})")
-                log(f"   ↳ Telemetry -> Lat: {ship_data['latitude']}, Lon: {ship_data['longitude']}, "
-                    f"Speed: {ship_data['sog']}kn, Course: {ship_data['cog']}°, "
-                    f"Heading: {ship_data['heading']}°, Status: {ship_data['nav_status_string']}")
-                update_ha_entity(ship_data)
-            
-            # Update last seen timestamp for memory persistence
-            now = datetime.now()
-            seen_ships[mmsi] = now
-            
-            # 2. Logic for Dynamic Map Entities (Updates live as ship moves, with anti-spam rate limiting)
-            last_updated = last_map_update.get(mmsi)
-            if last_updated is None or (now - last_updated).total_seconds() >= 60:
-                update_map_entity(ship_data)
-                last_map_update[mmsi] = now
-                
-                # If it's not a brand new ship, log the 60-second update so we can verify it's working
-                if last_updated is not None:
-                    log(f"🗺️ Ship Updated: {name} ({vessel_class} | MMSI: {mmsi}) | Lat: {ship_data.get('latitude')}, Lon: {ship_data.get('longitude')}")
+            handle_ship_position(ship_data)
                 
     except json.JSONDecodeError as e:
         log(f"JSON Decode Error: Received malformed data from AISStream - {e}")
@@ -768,7 +1087,10 @@ def on_close(ws, close_status_code, close_msg):
     
     # Add a helpful hint if the server drops us instantly without a word (usually an API key issue)
     if close_status_code is None and close_msg is None:
-        error_reason = "Closed by server silently (Code: None). Check your API Key or go to https://aisuptime.buttermilkgreen.fyi/ for service status."
+        if IS_OPEN_WATERS:
+            error_reason = "Closed by server silently (Code: None). Check your Open Waters token or visit https://status.openwaters.io/ for service status."
+        else:
+            error_reason = "Closed by server silently (Code: None). Check your API Key or go to https://aisuptime.buttermilkgreen.fyi/ for service status."
     else:
         safe_msg = close_msg if close_msg is not None else "No message provided"
         error_reason = f"Closed by server. Code: {close_status_code} - Msg: {safe_msg}"
@@ -805,11 +1127,119 @@ def on_open(ws):
         
     ws.send(json.dumps(subscription_message))
 
-def start_tracker():
+def periodic_maintenance_worker():
+    global last_purge_time
+    while not shutdown_in_progress:
+        time.sleep(15)
+        now = datetime.now()
+        if (now - last_purge_time).total_seconds() >= 60:
+            purge_old_ships()
+            if IS_AIS_CATCHER:
+                update_conn_status(current_conn_status)
+            last_purge_time = now
+
+# Start background maintenance thread for regular ship purging in both modes
+threading.Thread(target=periodic_maintenance_worker, daemon=True).start()
+
+def start_mqtt_tracker():
+    global mqtt_client_instance, reconnect_attempts
+    try:
+        import paho.mqtt.client as mqtt
+    except ImportError:
+        log("❌ Fatal: 'paho-mqtt' library is not installed.")
+        update_conn_status("Disconnected", new_error="paho-mqtt library missing")
+        time.sleep(30)
+        return
+
+    creds = get_mqtt_credentials()
+    broker_host = creds["host"]
+    broker_port = creds["port"]
+    username = creds.get("username")
+    password = creds.get("password")
+
+    mode_str = "All Vessels (Class A & B)" if INCLUDE_CLASS_B else "Commercial Only (Class A)"
+    log(f"🚢 Tracker Mode: {mode_str}")
+    if watchlist_mmsis:
+        log(f"🎯 Filtering active for {len(watchlist_mmsis)} MMSI(s).")
+
+    if not FILTER_LOCAL_BY_BOUNDING_BOX:
+        log("📡 AIS-catcher mode active: Tracking all vessels received by local antenna (bounding box filter DISABLED).")
+    else:
+        log(f"📡 AIS-catcher mode active: Bounding box filter ENABLED ({lat_south}, {lon_west} to {lat_north}, {lon_east}).")
+
+    if ENABLE_MAP_ENTITIES:
+        log("🗺️ Multi-Ship Map Entities: ENABLED (individual vessel tracking entities will be created).")
+    else:
+        log("ℹ️ Multi-Ship Map Entities: DISABLED (only the 'last passing ship' and connection status entities will be updated).")
+
+    log(f"Connecting to MQTT broker at {broker_host}:{broker_port}...")
+    update_conn_status("Connecting")
+
+    if hasattr(mqtt, "CallbackAPIVersion"):
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    else:
+        client = mqtt.Client()
+
+    mqtt_client_instance = client
+
+    if username and password:
+        client.username_pw_set(username, password)
+    elif username:
+        client.username_pw_set(username)
+
+    def on_mqtt_connect(client, userdata, flags, rc, *args):
+        global reconnect_attempts
+        is_success = (rc == 0) if isinstance(rc, int) else (not getattr(rc, "is_failure", True))
+        if is_success:
+            reconnect_attempts = 0
+            log(f"🟢 Connected to MQTT broker! Subscribing to: {', '.join(MQTT_TOPICS)}...")
+            update_conn_status("Connected")
+            for t in MQTT_TOPICS:
+                client.subscribe(t)
+        else:
+            log(f"❌ Failed to connect to MQTT broker ({broker_host}:{broker_port}), code: {rc}")
+            update_conn_status("Disconnected", new_error=f"MQTT Connect failed: {rc}")
+
+    def on_mqtt_disconnect(client, userdata, rc, *args):
+        if shutdown_in_progress:
+            log("❌ MQTT Connection closed (Shutdown in progress).")
+            return
+        log(f"⚠️ MQTT Disconnected from broker ({rc}). Reconnecting will occur automatically...")
+        update_conn_status("Disconnected", new_error=f"MQTT Disconnected: {rc}")
+
+    def on_mqtt_message(client, userdata, msg):
+        global last_packet_time, local_packets_received
+        try:
+            payload_str = msg.payload.decode("utf-8")
+            last_packet_time = datetime.now()
+            local_packets_received += 1
+            handle_aiscatcher_message(payload_str)
+        except UnicodeDecodeError:
+            pass
+        except Exception as e:
+            log(f"Unexpected error in MQTT message handler: {e}")
+
+    client.on_connect = on_mqtt_connect
+    client.on_disconnect = on_mqtt_disconnect
+    client.on_message = on_mqtt_message
+
+    try:
+        client.connect(broker_host, broker_port, keepalive=60)
+        client.loop_forever()
+    except Exception as e:
+        log(f"❌ MQTT connection error to {broker_host}:{broker_port}: {e}")
+        update_conn_status("Disconnected", new_error=str(e))
+        return
+
+def start_websocket_tracker():
     # Bounding Box Sanity Check
     lat_diff = abs(lat_north - lat_south)
     lon_diff = abs(lon_east - lon_west)
-    if lat_diff > 3.0 or lon_diff > 3.0:
+    if IS_OPEN_WATERS:
+        box_area = lat_diff * lon_diff
+        if lat_diff > 20.0 or lon_diff > 20.0 or box_area > 400.0:
+            log(f"⚠️ WARNING: Bounding box ({lat_diff:.2f}°x{lon_diff:.2f}°, {box_area:.1f} deg²) exceeds Open Waters Personal Tier limit (~20°x20° / 400 deg²). Unless using a Contributor or Commercial token, subscription may be rejected by the server.")
+    elif lat_diff > 3.0 or lon_diff > 3.0:
         log("⚠️ WARNING: Bounding box is extremely large. This may cause high API load and memory usage.")
 
     mode_str = "All Vessels (Class A & B)" if INCLUDE_CLASS_B else "Commercial Only (Class A)"
@@ -817,6 +1247,8 @@ def start_tracker():
 
     if watchlist_mmsis:
         log(f"🎯 Filtering active for {len(watchlist_mmsis)} MMSI(s).")
+        if IS_OPEN_WATERS and len(watchlist_mmsis) > 50:
+            log(f"⚠️ WARNING: Open Waters Personal Tier supports a maximum of 50 MMSIs in the watchlist (currently configured: {len(watchlist_mmsis)}). Filtering may be rejected by Open Waters unless on a higher tier.")
     else:
         log("🌐 Monitoring all vessels within the bounding box (no filters active).")
 
@@ -826,8 +1258,10 @@ def start_tracker():
         log("ℹ️ Multi-Ship Map Entities: DISABLED (only the 'last passing ship' and connection status entities will be updated).")
 
     env_str = "DEV" if DEV_MODE else "PROD"
-    if DEV_MODE and WEBSOCKET_URL != "wss://stream.aisstream.io/v0/stream":
+    if DEV_MODE and WEBSOCKET_URL not in ["wss://stream.aisstream.io/v0/stream", "wss://ais.openwaters.io/v0/stream"]:
         log(f"[{env_str}] [{VERSION}] Connecting to custom websocket destination: {WEBSOCKET_URL}...")
+    elif IS_OPEN_WATERS:
+        log(f"[{env_str}] [{VERSION}] Connecting to Open Waters...")
     else:
         log(f"[{env_str}] [{VERSION}] Connecting to AISStream...")
         
@@ -844,11 +1278,23 @@ def start_tracker():
     
     ws.run_forever(ping_interval=60, ping_timeout=10)
 
+def start_tracker():
+    if IS_AIS_CATCHER:
+        start_mqtt_tracker()
+    else:
+        start_websocket_tracker()
+
 def graceful_shutdown(signum, frame):
     global shutdown_in_progress
     shutdown_in_progress = True
     log("🛑 Received stop signal from Home Assistant. Shutting down gracefully...")
     update_conn_status("Stopped", new_error="Add-on stopped by user or system.")
+    if mqtt_client_instance:
+        try:
+            mqtt_client_instance.disconnect()
+            mqtt_client_instance.loop_stop()
+        except:
+            pass
     log("🛑 Tracker safely stopped.")
     sys.exit(0)
 
@@ -860,7 +1306,11 @@ if __name__ == "__main__":
         
     try:
         while True:
-            start_tracker()
+            try:
+                start_tracker()
+            except Exception as loop_err:
+                log(f"⚠️ Unexpected error in tracker loop: {loop_err}")
+                update_conn_status("Disconnected", new_error=str(loop_err))
             update_conn_status("Reconnecting")
             
             reconnect_attempts += 1

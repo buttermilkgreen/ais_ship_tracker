@@ -1,7 +1,7 @@
 configuration:
   api_key:
     name: API Key
-    description: Generate this at aisstream.io.
+    description: Generate at aisstream.io or openwaters.io/ais/token/.
   longitude_west:
     name: Bounding Box - Bottom-Left Longitude (West)
     description: Left edge of your tracking zone.
@@ -30,5 +30,11 @@ configuration:
     name: Ship Entity Timeout (Minutes)
     description: How long before a ship with no new tracking data is removed from the map.
   enable_api_monitoring:
-    name: API Monitoring
-    description: Enable entity to monitor API connection status.
+    name: API Uptime Monitoring
+    description: Enable entity to monitor API service health status.
+  data_source:
+    name: Data Source
+    description: Choose between AISStream.io, Open Waters, or a local AIS-catcher instance.
+  filter_local_by_bounding_box:
+    name: Enable Bounding Box for AIS-catcher
+    description: For local AIS-catcher source only. When off, all vessels received by your antenna are tracked. Turn on to restrict local tracking to your bounding box coordinates. 
