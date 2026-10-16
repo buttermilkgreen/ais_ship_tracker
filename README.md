@@ -43,7 +43,7 @@ To install this add-on, you need to add this repository to your Home Assistant a
 
 * **AISStream.io**: Go to [aisstream.io](https://aisstream.io), sign in, generate an API Key, and enter it in the add-on configuration.
 * **Open Waters**: Generate a free token in one click (no account needed) at [openwaters.io/ais/token/](https://openwaters.io/ais/token/) and enter it in the API Key box.
-* **AIS-catcher**: No API key or cloud account required!
+* **AIS-catcher**: No API key or cloud account required. See below for more information.
 
 ---
 
