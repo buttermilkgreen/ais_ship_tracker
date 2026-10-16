@@ -182,6 +182,7 @@ attributes:
 ---
 ## 🛠️ Config Specifics
 
+* **`Data Source`**: Use the [AISStream.io](https://aisstream.io) websocket or AIS-catcher if you have a local antenna.
 * **`API Key`**: The free API key you need to generate from [AISStream.io](https://aisstream.io).
 * **`Bounding Box - Bottom-Left Longitude (West)`**: Left edge of the bounding box and the first number from bboxfinder co-ordinates.
 * **`Bounding Box - Bottom-Left Latitude (South)`**: Bottom edge of the bounding box and the second number from bboxfinder co-ordinates.
